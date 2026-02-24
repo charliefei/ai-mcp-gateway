@@ -1,9 +1,12 @@
 package com.feirui.ai.config;
 
+import com.feirui.ai.infrastructure.gateway.GenericHttpGateway;
 import okhttp3.ConnectionPool;
 import okhttp3.OkHttpClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import retrofit2.Retrofit;
+import retrofit2.converter.gson.GsonConverterFactory;
 
 import java.util.concurrent.TimeUnit;
 
@@ -22,6 +25,16 @@ public class HTTPClientConfig {
                 .readTimeout(300, TimeUnit.SECONDS)
                 .writeTimeout(300, TimeUnit.SECONDS)
                 .build();
+    }
+
+    @Bean
+    public GenericHttpGateway genericHttpGateway(OkHttpClient okHttpClient) {
+        Retrofit retrofit = new Retrofit.Builder()
+                .baseUrl("http://127.0.0.1/")
+                .addConverterFactory(GsonConverterFactory.create())
+                .client(okHttpClient)
+                .build();
+        return retrofit.create(GenericHttpGateway.class);
     }
 
 }
