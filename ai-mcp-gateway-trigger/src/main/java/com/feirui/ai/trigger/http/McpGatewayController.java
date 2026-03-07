@@ -3,15 +3,19 @@ package com.feirui.ai.trigger.http;
 import com.alibaba.fastjson.JSON;
 import com.feirui.ai.api.IMcpGatewayService;
 import com.feirui.ai.api.response.Response;
+import com.feirui.ai.cases.mcp.IMcpMessageService;
 import com.feirui.ai.cases.mcp.IMcpSessionService;
+import com.feirui.ai.domain.session.model.entity.HandleMessageCommandEntity;
 import com.feirui.ai.types.enums.ResponseCode;
 import com.feirui.ai.types.exception.AppException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import javax.annotation.Resource;
 import java.util.UUID;
@@ -27,6 +31,9 @@ public class McpGatewayController implements IMcpGatewayService {
 
     @Resource
     private IMcpSessionService mcpSessionService;
+
+    @Resource
+    private IMcpMessageService mcpMessageService;
 
     /**
      * 处理 sse 连接，创建会话
@@ -62,6 +69,50 @@ public class McpGatewayController implements IMcpGatewayService {
         } catch (Exception e) {
             log.error("建立 MCP SSE 连接失败，gatewayId: {}", gatewayId, e);
             throw e;
+        }
+    }
+
+    /**
+     * 处理 sse 消息，响应会话
+     *
+     * @param gatewayId   网关ID
+     * @param sessionId   会话ID
+     * @param messageBody 请求消息
+     * @return 响应结果
+     * <br/>
+     * {
+     * "jsonrpc": "2.0",
+     * "method": "initialize",
+     * "id": "95835f74-0",
+     * "params": {
+     * "protocolVersion": "2024-11-05",
+     * "capabilities": {},
+     * "clientInfo": {
+     * "name": "Java SDK MCP Client",
+     * "version": "1.0.0"
+     * }
+     * }
+     * }
+     */
+    @PostMapping(value = "{gatewayId}/mcp/sse", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<ResponseEntity<Void>> handleMessage(@PathVariable("gatewayId") String gatewayId,
+                                                    @RequestParam("sessionId") String sessionId,
+                                                    @RequestParam("api_key") String apiKey,
+                                                    @RequestBody String messageBody) {
+        try {
+            log.info("处理 MCP SSE 消息，gatewayId:{} apiKey:{} sessionId:{} messageBody:{}", gatewayId, apiKey, sessionId, messageBody);
+            if (StringUtils.isBlank(gatewayId) || StringUtils.isBlank(sessionId)) {
+                log.info("非法参数，gateway、sessionId is null");
+                throw new AppException(ResponseCode.ILLEGAL_PARAMETER.getCode(), ResponseCode.ILLEGAL_PARAMETER.getInfo());
+            }
+
+            HandleMessageCommandEntity commandEntity = new HandleMessageCommandEntity(gatewayId, apiKey, sessionId, messageBody);
+            ResponseEntity<Void> responseEntity = mcpMessageService.handleMessage(commandEntity);
+
+            return Mono.just(responseEntity);
+        } catch (Exception e) {
+            log.error("处理 MCP SSE 消息失败，gatewayId:{} sessionId:{} messageBody:{}", gatewayId, sessionId, messageBody, e);
+            return Mono.just(ResponseEntity.internalServerError().build());
         }
     }
 
