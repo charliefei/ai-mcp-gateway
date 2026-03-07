@@ -3,6 +3,7 @@ package com.feirui.ai.domain.session.service.management;
 import com.feirui.ai.domain.session.model.valobj.SessionConfigVO;
 import com.feirui.ai.domain.session.service.ISessionManagementService;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Sinks;
@@ -42,7 +43,7 @@ public class SessionManagementService implements ISessionManagementService {
     }
 
     @Override
-    public SessionConfigVO createSession(String gatewayId) {
+    public SessionConfigVO createSession(String gatewayId, String apiKey) {
         log.info("创建会话 gatewayId:{}", gatewayId);
 
         String sessionId = UUID.randomUUID().toString();
@@ -51,6 +52,10 @@ public class SessionManagementService implements ISessionManagementService {
 
         // 发送端点消息 - 告知客户端消息请求地址（客户端第二次会使用 messageEndpoint 进行请求会话）
         String messageEndpoint = "/api-gateway/" + gatewayId + "/mcp/sse?sessionId=" + sessionId;
+        if (StringUtils.isNoneBlank(apiKey)) {
+            messageEndpoint += "&api_key=" + apiKey;
+        }
+
         sink.tryEmitNext(ServerSentEvent.<String>builder()
                 .event("endpoint")
                 .data(messageEndpoint)
