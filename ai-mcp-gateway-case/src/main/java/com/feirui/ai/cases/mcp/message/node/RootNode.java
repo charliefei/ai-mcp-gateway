@@ -3,6 +3,8 @@ package com.feirui.ai.cases.mcp.message.node;
 import cn.bugstack.wrench.design.framework.tree.StrategyHandler;
 import com.feirui.ai.cases.mcp.message.AbstractMcpMessageServiceSupport;
 import com.feirui.ai.cases.mcp.message.factory.DefaultMcpMessageFactory;
+import com.feirui.ai.domain.auth.model.entity.RateLimitCommandEntity;
+import com.feirui.ai.domain.auth.service.IAuthRateLimitService;
 import com.feirui.ai.domain.session.model.entity.HandleMessageCommandEntity;
 import com.feirui.ai.domain.session.model.valobj.McpSchemaVO;
 import com.feirui.ai.domain.session.model.valobj.enums.SessionMessageHandlerMethodEnum;
@@ -24,8 +26,8 @@ public class RootNode extends AbstractMcpMessageServiceSupport {
     @Resource(name = "mcpMessageSessionNode")
     private SessionNode sessionNode;
 
-    // @Resource
-    // private IAuthRateLimitService authRateLimitService;
+    @Resource
+    private IAuthRateLimitService authRateLimitService;
 
     @Override
     protected ResponseEntity<Void> doApply(HandleMessageCommandEntity requestParameter, DefaultMcpMessageFactory.DynamicContext dynamicContext) throws Exception {
@@ -39,11 +41,11 @@ public class RootNode extends AbstractMcpMessageServiceSupport {
                 SessionMessageHandlerMethodEnum sessionMessageHandlerMethodEnum = SessionMessageHandlerMethodEnum.getByMethod(method);
                 if (SessionMessageHandlerMethodEnum.TOOLS_CALL.equals(sessionMessageHandlerMethodEnum)){
                     // 是（true）否（false）命中限流
-                    // boolean isHit = authRateLimitService.rateLimit(new RateLimitCommandEntity(requestParameter.getGatewayId(), requestParameter.getApiKey()));
-                    // if (isHit) {
-                    //     log.warn("消息处理 mcp message RootNode - 命中限流{} {}", requestParameter.getGatewayId(), requestParameter.getApiKey());
-                    //     throw new AppException(McpErrorCodes.INSUFFICIENT_PERMISSIONS, "fail to auth apikey rateLimiter");
-                    // }
+                    boolean isHit = authRateLimitService.rateLimit(new RateLimitCommandEntity(requestParameter.getGatewayId(), requestParameter.getApiKey()));
+                    if (isHit) {
+                        log.warn("消息处理 mcp message RootNode - 命中限流{} {}", requestParameter.getGatewayId(), requestParameter.getApiKey());
+                        throw new AppException(McpErrorCodes.INSUFFICIENT_PERMISSIONS, "fail to auth apikey rateLimiter");
+                    }
                 }
             }
 
