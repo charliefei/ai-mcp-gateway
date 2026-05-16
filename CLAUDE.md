@@ -30,6 +30,8 @@ mvn test -pl ai-mcp-gateway-app -Dtest=ApiTest
 
 **Runtime**: Java 17, Spring Boot 3.4.3, port 8777, context-path `/api-gateway`
 
+**Required env vars**: `DASHSCOPE_API_KEY` (Alibaba Bailian/DashScope API key for LLM features)
+
 ## Architecture
 
 DDD (Domain-Driven Design) layered architecture using Maven modules:
@@ -39,7 +41,7 @@ DDD (Domain-Driven Design) layered architecture using Maven modules:
 | `ai-mcp-gateway-trigger` | Trigger | HTTP controllers (REST endpoints) |
 | `ai-mcp-gateway-api` | API | Service interfaces exposed to trigger layer |
 | `ai-mcp-gateway-case` | Case | Orchestration — tree strategy chains for session creation and message handling |
-| `ai-mcp-gateway-domain` | Domain | Core business logic: auth, session, protocol domain services |
+| `ai-mcp-gateway-domain` | Domain | Core business logic: auth, session, protocol, gateway, admin, llm domain services |
 | `ai-mcp-gateway-infrastructure` | Infrastructure | DB access (MyBatis), HTTP clients (Retrofit/OkHttp), Redis |
 | `ai-mcp-gateway-types` | Types | Shared enums, constants, exceptions |
 | `ai-mcp-gateway-app` | App | Spring Boot entry point, configs, MyBatis mappers, resources |
@@ -71,15 +73,30 @@ Factories (`DefaultMcpSessionFactory`, `DefaultMcpMessageFactory`) wire the chai
 
 ## SSE Endpoint Flow
 
-1. Client GETs `/{gatewayId}/mcp/sse` → creates session, returns SSE stream with `endpoint` event containing the message URL
-2. Client POSTs JSON-RPC to `/{gatewayId}/mcp/sse?sessionId=X` → gateway dispatches to appropriate handler
+1. Client GETs `/{gatewayId}/mcp/sse?api_key=KEY` → creates session, returns SSE stream with `endpoint` event containing the message URL
+2. Client POSTs JSON-RPC to `/{gatewayId}/mcp/sse?sessionId=X&api_key=KEY` → gateway dispatches to appropriate handler
 3. Responses stream back over the SSE connection
+
+The `api_key` query parameter is optional but required for gateways with auth enabled. Auth keys are managed via the admin API.
 
 ## Configuration
 
-- `application-dev.yml` — local dev (MySQL at 127.0.0.1:3306, DeepSeek AI)
+- `application-dev.yml` — local dev (MySQL at 127.0.0.1:3306, database `ai_mcp_gateway_v2`)
 - `application-test.yml`, `application-prod.yml` — other environments
-- Spring AI configured for OpenAI-compatible endpoints (currently DeepSeek)
+- Spring AI configured for OpenAI-compatible endpoints against Alibaba Bailian/DashScope (`qwen3.6-flash` model)
+- Thread pool: core 20 / max 50, CallerRunsPolicy rejection (see `ThreadPoolConfig`)
+
+## Admin Management API
+
+An operations management subsystem at `/admin/` provides CRUD management for gateway configurations:
+
+- **Gateway config**: save, query list/paginated
+- **Tool config**: save/delete, query list/paginated/by gateway ID
+- **Protocol config**: save/delete/import (OpenAPI JSON), query list/paginated/by gateway ID, analysis (preview parsed OpenAPI)
+- **Auth config**: save/delete, query list/paginated/by gateway ID
+- **LLM test call**: `test_call_gateway` — sends a test request through the gateway to verify end-to-end connectivity
+
+Triggers route to case-layer admin services (`IAdminGatewayService`, `IAdminAuthService`, `IAdminProtocolService`, `IAdminManageService`, `IAdminLLMService`), which delegate to domain services in `domain.gateway`, `domain.admin`, and `domain.llm` packages.
 
 ## Key Dependencies
 
