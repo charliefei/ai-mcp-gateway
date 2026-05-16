@@ -34,12 +34,11 @@ spring:
   # spring ai
   ai:
     openai:
-      base-url: https://api.deepseek.com
-      api-key: ${DEEPSEEK_API_KEY}
+      base-url: https://dashscope.aliyuncs.com/compatible-mode
+      api-key: ${DASHSCOPE_API_KEY}
       chat:
         options:
-          model: deepseek-v4-flash
-        completions-path: /chat/completions
+          model: qwen3.6-flash
 
 # MyBatis 配置【如需使用记得打开】
 mybatis:
