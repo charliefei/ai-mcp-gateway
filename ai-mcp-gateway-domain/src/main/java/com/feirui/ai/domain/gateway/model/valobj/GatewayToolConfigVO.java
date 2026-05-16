@@ -1,24 +1,19 @@
-package com.feirui.ai.infrastructure.dao.po;
+package com.feirui.ai.domain.gateway.model.valobj;
 
-import com.feirui.ai.infrastructure.dao.po.base.BasePagePO;
-import lombok.*;
-
-import java.util.Date;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 /**
- * MCP网关工具表
+ * 网关工具配置值对象
  */
-@EqualsAndHashCode(callSuper = true)
-@Data
+@Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class McpGatewayToolPO extends BasePagePO {
+public class GatewayToolConfigVO {
 
-    /**
-     * 自增ID
-     */
-    private Long id;
     /**
      * 所属网关ID
      */
@@ -51,13 +46,5 @@ public class McpGatewayToolPO extends BasePagePO {
      * 协议类型；协议类型；http、dubbo、rabbitmq
      */
     private String protocolType;
-    /**
-     * 创建时间
-     */
-    private Date createTime;
-    /**
-     * 更新时间
-     */
-    private Date updateTime;
 
 }

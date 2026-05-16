@@ -1,20 +1,19 @@
 package com.feirui.ai.infrastructure.dao.po;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import com.feirui.ai.infrastructure.dao.po.base.BasePagePO;
+import lombok.*;
 
 import java.util.Date;
 
 /**
  * 用户网关权限表
  */
+@EqualsAndHashCode(callSuper = true)
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class McpGatewayAuthPO {
+public class McpGatewayAuthPO extends BasePagePO {
 
     /**
      * 主键ID

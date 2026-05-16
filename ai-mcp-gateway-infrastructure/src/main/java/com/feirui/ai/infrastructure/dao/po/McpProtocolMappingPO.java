@@ -1,20 +1,19 @@
 package com.feirui.ai.infrastructure.dao.po;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import com.feirui.ai.infrastructure.dao.po.base.BasePagePO;
+import lombok.*;
 
 import java.util.Date;
 
 /**
  * MCP映射配置表
  */
+@EqualsAndHashCode(callSuper = true)
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class McpProtocolMappingPO {
+public class McpProtocolMappingPO extends BasePagePO {
 
     /**
      * 主键ID
