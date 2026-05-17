@@ -26,6 +26,10 @@ mvn test
 
 # Run a single test class
 mvn test -pl ai-mcp-gateway-app -Dtest=ApiTest
+
+# Run admin UI (from ai-mcp-gateway-admin-ui)
+npm install
+npm run dev
 ```
 
 **Runtime**: Java 17, Spring Boot 3.4.3, port 8777, context-path `/api-gateway`
@@ -38,11 +42,12 @@ DDD (Domain-Driven Design) layered architecture using Maven modules:
 
 | Module | Layer | Responsibility |
 |---|---|---|
+| `ai-mcp-gateway-admin-ui` | UI | React/Vite admin frontend (TypeScript, shadcn/ui) |
 | `ai-mcp-gateway-trigger` | Trigger | HTTP controllers (REST endpoints) |
 | `ai-mcp-gateway-api` | API | Service interfaces exposed to trigger layer |
 | `ai-mcp-gateway-case` | Case | Orchestration — tree strategy chains for session creation and message handling |
 | `ai-mcp-gateway-domain` | Domain | Core business logic: auth, session, protocol, gateway, admin, llm domain services |
-| `ai-mcp-gateway-infrastructure` | Infrastructure | DB access (MyBatis), HTTP clients (Retrofit/OkHttp), Redis |
+| `ai-mcp-gateway-infrastructure` | Infrastructure | DB access (MyBatis), HTTP clients (Retrofit/OkHttp) |
 | `ai-mcp-gateway-types` | Types | Shared enums, constants, exceptions |
 | `ai-mcp-gateway-app` | App | Spring Boot entry point, configs, MyBatis mappers, resources |
 
@@ -85,6 +90,18 @@ The `api_key` query parameter is optional but required for gateways with auth en
 - `application-test.yml`, `application-prod.yml` — other environments
 - Spring AI configured for OpenAI-compatible endpoints against Alibaba Bailian/DashScope (`qwen3.6-flash` model)
 - Thread pool: core 20 / max 50, CallerRunsPolicy rejection (see `ThreadPoolConfig`)
+
+## Access URLs
+
+- API: `http://localhost:8777/api-gateway`
+- Admin UI: `http://localhost:5173` (Vite dev server)
+- Admin API: `http://localhost:8777/api-gateway/admin/`
+
+## Gotchas
+
+- The `api_key` is passed as a **query parameter** (`?api_key=KEY`), not as an HTTP header
+- `mvn spring-boot:run` must be run from repo root (parent POM), not from `ai-mcp-gateway-app/`
+- Database `ai_mcp_gateway_v2` must be created manually before first run (no schema migration scripts in repo)
 
 ## Admin Management API
 
