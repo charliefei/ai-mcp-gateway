@@ -30,7 +30,19 @@ mvn test -pl ai-mcp-gateway-app -Dtest=ApiTest
 # Run admin UI (from ai-mcp-gateway-admin-ui)
 npm install
 npm run dev
+
+# Type-check admin UI
+npx tsc --noEmit
+
+# Build admin UI for production
+npm run build
 ```
+
+**Admin UI stack**: React 18, Vite 6, TypeScript 5.6, Tailwind CSS 3 (class-based dark mode), Radix UI primitives, lucide-react icons, sonner toasts, react-router-dom v7. Custom shadcn/ui-style components in `src/components/ui/`.
+
+**Admin UI page pattern**: All 5 CRUD pages follow the same structure: search bar (Card) → data table with record count (CardHeader/CardContent) → pagination (when totalPages > 1) → create/edit dialog. Each page manages its own state with useState/useCallback; the `useApi` hooks in `src/hooks/use-api.ts` are available but pages use manual state.
+
+**Theme**: Dark mode via `darkMode: 'class'` in tailwind.config.ts. Toggle hook at `src/hooks/use-theme.ts` persists to localStorage, listens to system preference changes. CSS custom properties in `src/index.css` use HSL format (e.g., `271 81% 56%` for primary). Sidebar uses sidebar-specific tokens (`--sidebar-bg`, `--sidebar-fg`, etc.) defined in tailwind.config.ts.
 
 **Runtime**: Java 17, Spring Boot 3.4.3, port 8777, context-path `/api-gateway`
 
@@ -102,6 +114,7 @@ The `api_key` query parameter is optional but required for gateways with auth en
 - The `api_key` is passed as a **query parameter** (`?api_key=KEY`), not as an HTTP header
 - `mvn spring-boot:run` must be run from repo root (parent POM), not from `ai-mcp-gateway-app/`
 - Database `ai_mcp_gateway_v2` must be created manually before first run (no schema migration scripts in repo)
+- `vite.config.ts` requires `@types/node` for `path` and `__dirname` — if builds fail with TS2307/TS2304, run `npm install --save-dev @types/node`
 
 ## Admin Management API
 

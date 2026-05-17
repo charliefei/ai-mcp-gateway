@@ -12,15 +12,30 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { TableSkeleton } from '@/components/ui/skeleton'
 import { toolApi } from '@/lib/api'
 import { toast } from 'sonner'
 import { Plus, Search, RefreshCw, Wrench, Trash2 } from 'lucide-react'
 import type { GatewayToolConfigDTO, GatewayToolSaveRequest } from '@/types'
 
+function EmptyState({ onCreate }: { onCreate: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
+        <Wrench className="h-8 w-8" />
+      </div>
+      <p className="text-sm font-medium">暂无工具配置数据</p>
+      <p className="text-xs text-muted-foreground mt-1">点击"新增工具"按钮创建第一条记录</p>
+      <Button variant="link" onClick={onCreate} className="mt-2 cursor-pointer">创建第一个工具</Button>
+    </div>
+  )
+}
+
 export function ToolList() {
   const [data, setData] = useState<GatewayToolConfigDTO[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [initialLoad, setInitialLoad] = useState(true)
   const [page, setPage] = useState(1)
   const [rows, setRows] = useState(10)
   const [searchGatewayId, setSearchGatewayId] = useState('')
@@ -58,6 +73,7 @@ export function ToolList() {
       toast.error('查询工具配置失败')
     } finally {
       setLoading(false)
+      setInitialLoad(false)
     }
   }, [page, rows, searchGatewayId, searchToolId])
 
@@ -136,7 +152,7 @@ export function ToolList() {
     }
   }
 
-  const totalPages = Math.ceil(total / rows)
+  const totalPages = Math.max(1, Math.ceil(total / rows))
 
   return (
     <div className="space-y-6">
@@ -145,7 +161,7 @@ export function ToolList() {
           <h2 className="text-2xl font-bold tracking-tight">工具配置</h2>
           <p className="text-sm text-muted-foreground mt-1">管理网关下的 MCP 工具配置</p>
         </div>
-        <Button onClick={openCreate}>
+        <Button onClick={openCreate} className="cursor-pointer">
           <Plus className="h-4 w-4 mr-2" />
           新增工具
         </Button>
@@ -168,11 +184,15 @@ export function ToolList() {
               className="max-w-[200px]"
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             />
-            <Button variant="outline" onClick={handleSearch}>
+            <Button variant="outline" onClick={handleSearch} className="cursor-pointer">
               <Search className="h-4 w-4 mr-2" />
               搜索
             </Button>
-            <Button variant="ghost" onClick={() => { setSearchGatewayId(''); setSearchToolId(''); setPage(1); }}>
+            <Button
+              variant="ghost"
+              onClick={() => { setSearchGatewayId(''); setSearchToolId(''); setPage(1); }}
+              className="cursor-pointer"
+            >
               <RefreshCw className="h-4 w-4 mr-2" />
               重置
             </Button>
@@ -188,18 +208,18 @@ export function ToolList() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <RefreshCw className="h-5 w-5 animate-spin mr-2" />
-              加载中...
-            </div>
+          {initialLoad && loading ? (
+            <TableSkeleton columns={9} />
           ) : data.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <Wrench className="h-10 w-10 mb-3 opacity-30" />
-              <p>暂无工具配置数据</p>
-            </div>
+            <EmptyState onCreate={openCreate} />
           ) : (
             <>
+              {loading && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                  刷新中...
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -217,22 +237,30 @@ export function ToolList() {
                   </thead>
                   <tbody>
                     {data.map((item) => (
-                      <tr key={`${item.gatewayId}-${item.toolId}`} className="border-b hover:bg-slate-50 transition-colors">
-                        <td className="py-3 px-4 font-mono text-xs">{item.gatewayId}</td>
-                        <td className="py-3 px-4">{item.toolId}</td>
-                        <td className="py-3 px-4 font-medium">{item.toolName}</td>
+                      <tr key={`${item.gatewayId}-${item.toolId}`} className="border-b hover:bg-muted/50 transition-colors">
+                        <td className="py-3 px-4 font-mono text-xs">{item.gatewayId || '—'}</td>
+                        <td className="py-3 px-4">{item.toolId || '—'}</td>
+                        <td className="py-3 px-4 font-medium">{item.toolName || '—'}</td>
                         <td className="py-3 px-4">
-                          <Badge>{item.toolType}</Badge>
+                          <Badge>{item.toolType || '—'}</Badge>
                         </td>
-                        <td className="py-3 px-4 text-muted-foreground max-w-[150px] truncate">{item.toolDescription}</td>
-                        <td className="py-3 px-4 text-xs text-muted-foreground">{item.toolVersion}</td>
-                        <td className="py-3 px-4">{item.protocolId}</td>
+                        <td className="py-3 px-4 text-muted-foreground max-w-[150px] truncate" title={item.toolDescription}>
+                          {item.toolDescription || '—'}
+                        </td>
+                        <td className="py-3 px-4 text-xs text-muted-foreground">{item.toolVersion || '—'}</td>
+                        <td className="py-3 px-4">{item.protocolId || '—'}</td>
                         <td className="py-3 px-4">
-                          <Badge variant="secondary">{item.protocolType}</Badge>
+                          <Badge variant="secondary">{item.protocolType || '—'}</Badge>
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>编辑</Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDelete(item)} className="text-red-500 hover:text-red-700">
+                          <Button variant="ghost" size="sm" onClick={() => openEdit(item)} className="cursor-pointer">编辑</Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(item)}
+                            className="text-red-500 hover:text-red-700 cursor-pointer"
+                            aria-label={`删除工具 ${item.toolName}`}
+                          >
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         </td>
@@ -245,8 +273,8 @@ export function ToolList() {
                 <div className="flex items-center justify-between pt-4">
                   <span className="text-sm text-muted-foreground">第 {page} / {totalPages} 页</span>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</Button>
-                    <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>下一页</Button>
+                    <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)} className="cursor-pointer">上一页</Button>
+                    <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)} className="cursor-pointer">下一页</Button>
                   </div>
                 </div>
               )}
@@ -296,8 +324,8 @@ export function ToolList() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>取消</Button>
-            <Button onClick={handleSave} disabled={saving}>{saving ? '保存中...' : '保存'}</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} className="cursor-pointer">取消</Button>
+            <Button onClick={handleSave} disabled={saving} className="cursor-pointer">{saving ? '保存中...' : '保存'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 import { gatewayApi, authApi, testApi } from '@/lib/api'
 import { toast } from 'sonner'
 import { Play, RefreshCw, Server, Key } from 'lucide-react'
@@ -122,7 +123,7 @@ export function TestGateway() {
             <div className="space-y-2">
               <Label>选择网关 *</Label>
               {loadingGateways ? (
-                <div className="flex items-center text-sm text-muted-foreground"><RefreshCw className="h-4 w-4 animate-spin mr-2" />加载网关列表...</div>
+                <Skeleton className="h-9 w-full" />
               ) : (
                 <Select
                   value={selectedGatewayId}
@@ -158,7 +159,7 @@ export function TestGateway() {
                 id="reload"
                 checked={reload}
                 onChange={(e) => setReload(e.target.checked)}
-                className="rounded border-input"
+                className="h-4 w-4 rounded border-input text-primary focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
               />
               <Label htmlFor="reload">重新加载 LLM 模型</Label>
             </div>
@@ -173,7 +174,7 @@ export function TestGateway() {
               />
             </div>
 
-            <Button onClick={handleTest} disabled={loading} className="w-full">
+            <Button onClick={handleTest} disabled={loading} className="w-full cursor-pointer">
               {loading ? (
                 <><RefreshCw className="h-4 w-4 animate-spin mr-2" />调用中...</>
               ) : (
@@ -202,7 +203,7 @@ export function TestGateway() {
                 <p className="text-sm">点击发送按钮查看响应结果</p>
               </div>
             ) : (
-              <div className="bg-slate-950 text-slate-50 rounded-lg p-4 font-mono text-sm whitespace-pre-wrap min-h-[200px] max-h-[500px] overflow-y-auto">
+              <div className="bg-slate-950 text-slate-50 dark:bg-slate-900 dark:text-slate-100 dark:border dark:border-border rounded-lg p-4 font-mono text-sm whitespace-pre-wrap min-h-[200px] max-h-[500px] overflow-y-auto">
                 {response}
               </div>
             )}

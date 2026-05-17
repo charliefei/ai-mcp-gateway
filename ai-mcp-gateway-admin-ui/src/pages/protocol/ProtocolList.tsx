@@ -14,15 +14,29 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { TableSkeleton } from '@/components/ui/skeleton'
 import { protocolApi } from '@/lib/api'
 import { toast } from 'sonner'
-import { Plus, Search, RefreshCw, Globe, Trash2, Upload, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Search, RefreshCw, Globe, Trash2, Upload, ChevronDown, ChevronRight, X } from 'lucide-react'
 import type { GatewayProtocolDTO, HTTPProtocolSave, ProtocolMappingSave, ProtocolMappingDTO } from '@/types'
+
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
+        <Globe className="h-8 w-8" />
+      </div>
+      <p className="text-sm font-medium">暂无协议配置数据</p>
+      <p className="text-xs text-muted-foreground mt-1">点击"新增协议"或"导入 OpenAPI"按钮添加配置</p>
+    </div>
+  )
+}
 
 export function ProtocolList() {
   const [data, setData] = useState<GatewayProtocolDTO[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [initialLoad, setInitialLoad] = useState(true)
   const [page, setPage] = useState(1)
   const [rows, setRows] = useState(10)
   const [searchProtocolId, setSearchProtocolId] = useState('')
@@ -78,6 +92,7 @@ export function ProtocolList() {
       toast.error('查询协议配置失败')
     } finally {
       setLoading(false)
+      setInitialLoad(false)
     }
   }, [page, rows, searchProtocolId, searchHttpUrl])
 
@@ -255,12 +270,18 @@ export function ProtocolList() {
           <CardTitle className="text-base"><Globe className="h-4 w-4 inline mr-2" />协议列表 ({total} 条记录)</CardTitle>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="flex items-center justify-center py-12 text-muted-foreground"><RefreshCw className="h-5 w-5 animate-spin mr-2" />加载中...</div>
+          {initialLoad && loading ? (
+            <TableSkeleton columns={6} />
           ) : data.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground"><Globe className="h-10 w-10 mb-3 opacity-30" /><p>暂无协议配置数据</p></div>
+            <EmptyState />
           ) : (
             <>
+              {loading && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                  刷新中...
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -276,27 +297,34 @@ export function ProtocolList() {
                   <tbody>
                     {data.map((item) => (
                       <>
-                        <tr key={item.protocolId} className="border-b hover:bg-slate-50 transition-colors">
+                        <tr key={item.protocolId} className="border-b hover:bg-muted/50 transition-colors">
                           <td className="py-3 px-4">{item.protocolId}</td>
-                          <td className="py-3 px-4 font-mono text-xs max-w-[300px] truncate">{item.httpUrl}</td>
-                          <td className="py-3 px-4"><Badge>{item.httpMethod}</Badge></td>
-                          <td className="py-3 px-4">{item.timeout}</td>
+                          <td className="py-3 px-4 font-mono text-xs max-w-[300px] truncate" title={item.httpUrl}>
+                            {item.httpUrl || '—'}
+                          </td>
+                          <td className="py-3 px-4"><Badge>{item.httpMethod || '—'}</Badge></td>
+                          <td className="py-3 px-4">{item.timeout ?? '—'}</td>
                           <td className="py-3 px-4">
-                            <button onClick={() => toggleExpand(item.protocolId)} className="flex items-center gap-1 text-blue-600 hover:underline">
+                            <button
+                              onClick={() => toggleExpand(item.protocolId)}
+                              className="flex items-center gap-1 text-primary hover:underline cursor-pointer"
+                              aria-expanded={expandedRows.has(item.protocolId)}
+                              aria-controls={`mappings-${item.protocolId}`}
+                            >
                               {expandedRows.has(item.protocolId) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                               {item.mappings?.length || 0} 条映射
                             </button>
                           </td>
                           <td className="py-3 px-4 text-right">
-                            <Button variant="ghost" size="sm" onClick={() => handleDelete(item.protocolId)} className="text-red-500 hover:text-red-700"><Trash2 className="h-3 w-3" /></Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDelete(item.protocolId)} className="text-red-500 hover:text-red-700 cursor-pointer" aria-label={`删除协议 ${item.protocolId}`}><Trash2 className="h-3 w-3" /></Button>
                           </td>
                         </tr>
                         {expandedRows.has(item.protocolId) && item.mappings && (
-                          <tr key={`${item.protocolId}-mappings`}>
-                            <td colSpan={6} className="py-3 px-4 bg-slate-50">
+                          <tr key={`${item.protocolId}-mappings`} id={`mappings-${item.protocolId}`}>
+                            <td colSpan={6} className="py-3 px-4 bg-muted/30">
                               <table className="w-full text-xs border">
                                 <thead>
-                                  <tr className="bg-slate-100">
+                                  <tr className="bg-muted">
                                     <th className="p-2 text-left">mcpPath</th>
                                     <th className="p-2 text-left">fieldName</th>
                                     <th className="p-2 text-left">mcpType</th>
@@ -308,12 +336,12 @@ export function ProtocolList() {
                                 <tbody>
                                   {item.mappings.map((m: ProtocolMappingDTO, idx: number) => (
                                     <tr key={idx} className="border-t">
-                                      <td className="p-2 font-mono">{m.mcpPath}</td>
-                                      <td className="p-2">{m.fieldName}</td>
-                                      <td className="p-2"><Badge variant="secondary">{m.mcpType}</Badge></td>
-                                      <td className="p-2">{m.mappingType}</td>
+                                      <td className="p-2 font-mono">{m.mcpPath || '—'}</td>
+                                      <td className="p-2">{m.fieldName || '—'}</td>
+                                      <td className="p-2"><Badge variant="secondary">{m.mcpType || '—'}</Badge></td>
+                                      <td className="p-2">{m.mappingType || '—'}</td>
                                       <td className="p-2">{m.isRequired === 1 ? '是' : '否'}</td>
-                                      <td className="p-2 text-muted-foreground">{m.mcpDesc}</td>
+                                      <td className="p-2 text-muted-foreground">{m.mcpDesc || '—'}</td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -330,8 +358,8 @@ export function ProtocolList() {
                 <div className="flex items-center justify-between pt-4">
                   <span className="text-sm text-muted-foreground">第 {page} / {totalPages} 页</span>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</Button>
-                    <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>下一页</Button>
+                    <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)} className="cursor-pointer">上一页</Button>
+                    <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)} className="cursor-pointer">下一页</Button>
                   </div>
                 </div>
               )}
@@ -357,8 +385,8 @@ export function ProtocolList() {
             <div className="space-y-2">
               <div className="flex items-center justify-between"><Label>字段映射</Label><Button variant="outline" size="sm" onClick={addMapping}>+ 添加映射</Button></div>
               {editingProtocol.mappings.map((m, i) => (
-                <div key={i} className="border rounded-lg p-3 space-y-2 bg-slate-50">
-                  <div className="flex justify-between items-center"><span className="text-xs font-medium">映射 #{i + 1}</span><Button variant="ghost" size="sm" onClick={() => removeMapping(i)} className="text-red-500 h-6 w-6 p-0">x</Button></div>
+                <div key={i} className="border rounded-lg p-3 space-y-2 bg-muted/30">
+                  <div className="flex justify-between items-center"><span className="text-xs font-medium">映射 #{i + 1}</span><Button variant="ghost" size="sm" onClick={() => removeMapping(i)} className="text-red-500 h-6 w-6 p-0 cursor-pointer" aria-label={`删除映射 #${i + 1}`}><X className="h-3 w-3" /></Button></div>
                   <div className="grid grid-cols-2 gap-2">
                     <Input placeholder="mcpPath" value={m.mcpPath} onChange={(e) => updateMapping(i, 'mcpPath', e.target.value)} className="text-xs" />
                     <Input placeholder="fieldName" value={m.fieldName} onChange={(e) => updateMapping(i, 'fieldName', e.target.value)} className="text-xs" />

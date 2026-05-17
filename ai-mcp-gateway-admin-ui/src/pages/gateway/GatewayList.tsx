@@ -12,21 +12,35 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { TableSkeleton } from '@/components/ui/skeleton'
 import { gatewayApi } from '@/lib/api'
 import { toast } from 'sonner'
 import { Plus, Search, RefreshCw, Server } from 'lucide-react'
 import type { GatewayConfigDTO, GatewayConfigSaveRequest } from '@/types'
 
+function EmptyState({ onCreate }: { onCreate: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
+        <Server className="h-8 w-8" />
+      </div>
+      <p className="text-sm font-medium">暂无网关配置数据</p>
+      <p className="text-xs text-muted-foreground mt-1">点击"新增网关"按钮创建第一条记录</p>
+      <Button variant="link" onClick={onCreate} className="mt-2 cursor-pointer">创建第一个网关</Button>
+    </div>
+  )
+}
+
 export function GatewayList() {
   const [data, setData] = useState<GatewayConfigDTO[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [initialLoad, setInitialLoad] = useState(true)
   const [page, setPage] = useState(1)
   const [rows, setRows] = useState(10)
   const [searchGatewayId, setSearchGatewayId] = useState('')
   const [searchGatewayName, setSearchGatewayName] = useState('')
 
-  // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editItem, setEditItem] = useState<GatewayConfigDTO | null>(null)
   const [saving, setSaving] = useState(false)
@@ -58,6 +72,7 @@ export function GatewayList() {
       toast.error('查询网关配置失败')
     } finally {
       setLoading(false)
+      setInitialLoad(false)
     }
   }, [page, rows, searchGatewayId, searchGatewayName])
 
@@ -118,23 +133,21 @@ export function GatewayList() {
     }
   }
 
-  const totalPages = Math.ceil(total / rows)
+  const totalPages = Math.max(1, Math.ceil(total / rows))
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">网关配置</h2>
           <p className="text-sm text-muted-foreground mt-1">管理所有网关实例的配置信息</p>
         </div>
-        <Button onClick={openCreate}>
+        <Button onClick={openCreate} className="cursor-pointer">
           <Plus className="h-4 w-4 mr-2" />
           新增网关
         </Button>
       </div>
 
-      {/* Search */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center gap-3">
@@ -152,11 +165,15 @@ export function GatewayList() {
               className="max-w-[200px]"
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             />
-            <Button variant="outline" onClick={handleSearch}>
+            <Button variant="outline" onClick={handleSearch} className="cursor-pointer">
               <Search className="h-4 w-4 mr-2" />
               搜索
             </Button>
-            <Button variant="ghost" onClick={() => { setSearchGatewayId(''); setSearchGatewayName(''); setPage(1); }}>
+            <Button
+              variant="ghost"
+              onClick={() => { setSearchGatewayId(''); setSearchGatewayName(''); setPage(1); }}
+              className="cursor-pointer"
+            >
               <RefreshCw className="h-4 w-4 mr-2" />
               重置
             </Button>
@@ -164,7 +181,6 @@ export function GatewayList() {
         </CardContent>
       </Card>
 
-      {/* Table */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
@@ -173,19 +189,18 @@ export function GatewayList() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <RefreshCw className="h-5 w-5 animate-spin mr-2" />
-              加载中...
-            </div>
+          {initialLoad && loading ? (
+            <TableSkeleton columns={7} />
           ) : data.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <Server className="h-10 w-10 mb-3 opacity-30" />
-              <p>暂无网关配置数据</p>
-              <Button variant="link" onClick={openCreate} className="mt-2">创建第一个网关</Button>
-            </div>
+            <EmptyState onCreate={openCreate} />
           ) : (
             <>
+              {loading && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                  刷新中...
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -201,11 +216,13 @@ export function GatewayList() {
                   </thead>
                   <tbody>
                     {data.map((item) => (
-                      <tr key={item.gatewayId} className="border-b hover:bg-slate-50 transition-colors">
-                        <td className="py-3 px-4 font-mono text-xs">{item.gatewayId}</td>
-                        <td className="py-3 px-4 font-medium">{item.gatewayName}</td>
-                        <td className="py-3 px-4 text-muted-foreground max-w-[200px] truncate">{item.gatewayDesc}</td>
-                        <td className="py-3 px-4 text-muted-foreground text-xs">{item.version}</td>
+                      <tr key={item.gatewayId} className="border-b hover:bg-muted/50 transition-colors">
+                        <td className="py-3 px-4 font-mono text-xs">{item.gatewayId || '—'}</td>
+                        <td className="py-3 px-4 font-medium">{item.gatewayName || '—'}</td>
+                        <td className="py-3 px-4 text-muted-foreground max-w-[200px] truncate" title={item.gatewayDesc}>
+                          {item.gatewayDesc || '—'}
+                        </td>
+                        <td className="py-3 px-4 text-muted-foreground text-xs">{item.version || '—'}</td>
                         <td className="py-3 px-4">
                           <Badge variant={item.auth === 1 ? 'success' : 'secondary'}>
                             {item.auth === 1 ? '启用' : '禁用'}
@@ -217,7 +234,7 @@ export function GatewayList() {
                           </Badge>
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>
+                          <Button variant="ghost" size="sm" onClick={() => openEdit(item)} className="cursor-pointer">
                             编辑
                           </Button>
                         </td>
@@ -227,17 +244,16 @@ export function GatewayList() {
                 </table>
               </div>
 
-              {/* Pagination */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between pt-4">
                   <span className="text-sm text-muted-foreground">
                     第 {page} / {totalPages} 页
                   </span>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                    <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)} className="cursor-pointer">
                       上一页
                     </Button>
-                    <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+                    <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)} className="cursor-pointer">
                       下一页
                     </Button>
                   </div>
@@ -248,7 +264,6 @@ export function GatewayList() {
         </CardContent>
       </Card>
 
-      {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent onClose={() => setDialogOpen(false)}>
           <DialogHeader>
@@ -320,10 +335,10 @@ export function GatewayList() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} className="cursor-pointer">
               取消
             </Button>
-            <Button onClick={handleSave} disabled={saving}>
+            <Button onClick={handleSave} disabled={saving} className="cursor-pointer">
               {saving ? '保存中...' : '保存'}
             </Button>
           </DialogFooter>
