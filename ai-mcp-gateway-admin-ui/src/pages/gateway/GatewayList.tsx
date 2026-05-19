@@ -13,20 +13,27 @@ import {
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { TableSkeleton } from '@/components/ui/skeleton'
+import { PageHeader } from '@/components/ui/page-header'
 import { gatewayApi } from '@/lib/api'
 import { toast } from 'sonner'
-import { Plus, Search, RefreshCw, Server } from 'lucide-react'
+import { Plus, Search, RefreshCw, Server, Sparkles } from 'lucide-react'
 import type { GatewayConfigDTO, GatewayConfigSaveRequest } from '@/types'
 
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
-        <Server className="h-8 w-8" />
+    <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+      <div className="relative mb-5">
+        <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-primary/40 to-aurora-3/40 blur-xl opacity-50" />
+        <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl border border-border/60 bg-background/60 backdrop-blur-md">
+          <Server className="h-9 w-9 text-primary/70" strokeWidth={1.5} />
+        </div>
       </div>
-      <p className="text-sm font-medium">暂无网关配置数据</p>
-      <p className="text-xs text-muted-foreground mt-1">点击"新增网关"按钮创建第一条记录</p>
-      <Button variant="link" onClick={onCreate} className="mt-2 cursor-pointer">创建第一个网关</Button>
+      <p className="text-sm font-semibold text-foreground">暂无网关配置数据</p>
+      <p className="text-xs text-muted-foreground mt-1.5">点击下方按钮创建第一条网关</p>
+      <Button onClick={onCreate} variant="outline" className="mt-5 cursor-pointer">
+        <Sparkles className="h-4 w-4 mr-1.5" />
+        创建第一个网关
+      </Button>
     </div>
   )
 }
@@ -37,7 +44,7 @@ export function GatewayList() {
   const [loading, setLoading] = useState(false)
   const [initialLoad, setInitialLoad] = useState(true)
   const [page, setPage] = useState(1)
-  const [rows, setRows] = useState(10)
+  const [rows] = useState(10)
   const [searchGatewayId, setSearchGatewayId] = useState('')
   const [searchGatewayName, setSearchGatewayName] = useState('')
 
@@ -136,57 +143,81 @@ export function GatewayList() {
   const totalPages = Math.max(1, Math.ceil(total / rows))
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">网关配置</h2>
-          <p className="text-sm text-muted-foreground mt-1">管理所有网关实例的配置信息</p>
-        </div>
-        <Button onClick={openCreate} className="cursor-pointer">
-          <Plus className="h-4 w-4 mr-2" />
-          新增网关
-        </Button>
-      </div>
+    <div className="space-y-7">
+      <PageHeader
+        icon={Server}
+        title="网关配置"
+        display="Gateway"
+        meta="01 / Gateway Config"
+        description="管理所有 MCP 网关实例的基础配置、协议版本与认证开关。"
+        actions={
+          <Button onClick={openCreate} className="cursor-pointer">
+            <Plus className="h-4 w-4" />
+            新增网关
+          </Button>
+        }
+      />
 
+      {/* Search bar */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex items-center gap-3">
-            <Input
-              placeholder="网关ID"
-              value={searchGatewayId}
-              onChange={(e) => setSearchGatewayId(e.target.value)}
-              className="max-w-[200px]"
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            />
-            <Input
-              placeholder="网关名称"
-              value={searchGatewayName}
-              onChange={(e) => setSearchGatewayName(e.target.value)}
-              className="max-w-[200px]"
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            />
-            <Button variant="outline" onClick={handleSearch} className="cursor-pointer">
-              <Search className="h-4 w-4 mr-2" />
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[200px] max-w-[280px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
+              <Input
+                placeholder="网关 ID"
+                value={searchGatewayId}
+                onChange={(e) => setSearchGatewayId(e.target.value)}
+                className="pl-9"
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              />
+            </div>
+            <div className="relative flex-1 min-w-[200px] max-w-[280px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
+              <Input
+                placeholder="网关名称"
+                value={searchGatewayName}
+                onChange={(e) => setSearchGatewayName(e.target.value)}
+                className="pl-9"
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              />
+            </div>
+            <Button variant="default" size="sm" onClick={handleSearch} className="cursor-pointer">
               搜索
             </Button>
             <Button
               variant="ghost"
-              onClick={() => { setSearchGatewayId(''); setSearchGatewayName(''); setPage(1); }}
+              size="sm"
+              onClick={() => {
+                setSearchGatewayId('')
+                setSearchGatewayName('')
+                setPage(1)
+              }}
               className="cursor-pointer"
             >
-              <RefreshCw className="h-4 w-4 mr-2" />
+              <RefreshCw className="h-3.5 w-3.5" />
               重置
             </Button>
           </div>
         </CardContent>
       </Card>
 
+      {/* List */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            <Server className="h-4 w-4 inline mr-2" />
-            网关列表 ({total} 条记录)
-          </CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Server className="h-4 w-4 text-primary" strokeWidth={2.5} />
+            <CardTitle className="text-[15px]">网关列表</CardTitle>
+            <span className="ml-1 inline-flex items-center justify-center min-w-[26px] h-[22px] rounded-full bg-foreground/[0.06] px-2 text-[11px] font-semibold font-mono text-foreground/70">
+              {total}
+            </span>
+          </div>
+          {loading && !initialLoad && (
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <RefreshCw className="h-3 w-3 animate-spin" />
+              刷新中
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {initialLoad && loading ? (
@@ -195,45 +226,48 @@ export function GatewayList() {
             <EmptyState onCreate={openCreate} />
           ) : (
             <>
-              {loading && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
-                  <RefreshCw className="h-3 w-3 animate-spin" />
-                  刷新中...
-                </div>
-              )}
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto rounded-2xl border border-border/50 bg-background/30 backdrop-blur-sm">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-3 px-4 font-medium">网关ID</th>
-                      <th className="text-left py-3 px-4 font-medium">网关名称</th>
-                      <th className="text-left py-3 px-4 font-medium">描述</th>
-                      <th className="text-left py-3 px-4 font-medium">版本</th>
-                      <th className="text-left py-3 px-4 font-medium">认证状态</th>
-                      <th className="text-left py-3 px-4 font-medium">校验状态</th>
-                      <th className="text-right py-3 px-4 font-medium">操作</th>
+                    <tr className="border-b border-border/60 bg-foreground/[0.025]">
+                      <th className="text-left py-3 px-4 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">网关 ID</th>
+                      <th className="text-left py-3 px-4 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">网关名称</th>
+                      <th className="text-left py-3 px-4 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">描述</th>
+                      <th className="text-left py-3 px-4 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">版本</th>
+                      <th className="text-left py-3 px-4 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">认证</th>
+                      <th className="text-left py-3 px-4 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">校验</th>
+                      <th className="text-right py-3 px-4 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">操作</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.map((item) => (
-                      <tr key={item.gatewayId} className="border-b hover:bg-muted/50 transition-colors">
-                        <td className="py-3 px-4 font-mono text-xs">{item.gatewayId || '—'}</td>
-                        <td className="py-3 px-4 font-medium">{item.gatewayName || '—'}</td>
-                        <td className="py-3 px-4 text-muted-foreground max-w-[200px] truncate" title={item.gatewayDesc}>
+                    {data.map((item, idx) => (
+                      <tr
+                        key={item.gatewayId}
+                        className="border-b border-border/30 last:border-0 hover:bg-foreground/[0.025] transition-colors duration-150"
+                        style={{ animationDelay: `${idx * 30}ms` }}
+                      >
+                        <td className="py-3.5 px-4 font-mono text-xs">{item.gatewayId || '—'}</td>
+                        <td className="py-3.5 px-4 font-semibold text-foreground">{item.gatewayName || '—'}</td>
+                        <td className="py-3.5 px-4 text-muted-foreground max-w-[240px] truncate" title={item.gatewayDesc}>
                           {item.gatewayDesc || '—'}
                         </td>
-                        <td className="py-3 px-4 text-muted-foreground text-xs">{item.version || '—'}</td>
-                        <td className="py-3 px-4">
+                        <td className="py-3.5 px-4">
+                          <span className="font-mono text-xs text-muted-foreground">{item.version || '—'}</span>
+                        </td>
+                        <td className="py-3.5 px-4">
                           <Badge variant={item.auth === 1 ? 'success' : 'secondary'}>
+                            <span className="relative flex h-1.5 w-1.5">
+                              <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${item.auth === 1 ? 'bg-success' : 'bg-muted-foreground/50'}`} />
+                            </span>
                             {item.auth === 1 ? '启用' : '禁用'}
                           </Badge>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3.5 px-4">
                           <Badge variant={item.status === 1 ? 'default' : 'outline'}>
                             {item.status === 1 ? '强校验' : '不校验'}
                           </Badge>
                         </td>
-                        <td className="py-3 px-4 text-right">
+                        <td className="py-3.5 px-4 text-right">
                           <Button variant="ghost" size="sm" onClick={() => openEdit(item)} className="cursor-pointer">
                             编辑
                           </Button>
@@ -245,9 +279,9 @@ export function GatewayList() {
               </div>
 
               {totalPages > 1 && (
-                <div className="flex items-center justify-between pt-4">
-                  <span className="text-sm text-muted-foreground">
-                    第 {page} / {totalPages} 页
+                <div className="flex items-center justify-between pt-5">
+                  <span className="text-xs text-muted-foreground font-mono">
+                    页 {page} <span className="text-muted-foreground/50">/</span> {totalPages}
                   </span>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)} className="cursor-pointer">
@@ -267,11 +301,14 @@ export function GatewayList() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent onClose={() => setDialogOpen(false)}>
           <DialogHeader>
+            <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-primary">
+              {editItem ? 'Edit' : 'Create'}
+            </p>
             <DialogTitle>{editItem ? '编辑网关配置' : '新增网关配置'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 mt-4">
+          <div className="space-y-5 mt-6">
             <div className="space-y-2">
-              <Label htmlFor="gatewayId">网关ID *</Label>
+              <Label htmlFor="gatewayId">网关 ID *</Label>
               <Input
                 id="gatewayId"
                 value={form.gatewayId}

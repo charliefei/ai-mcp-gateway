@@ -7,9 +7,10 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageHeader } from '@/components/ui/page-header'
 import { gatewayApi, authApi, testApi } from '@/lib/api'
 import { toast } from 'sonner'
-import { Play, RefreshCw, Server, Key } from 'lucide-react'
+import { Play, RefreshCw, Server, Key, Terminal, Sparkles } from 'lucide-react'
 import type { GatewayConfigDTO, GatewayAuthDTO } from '@/types'
 
 export function TestGateway() {
@@ -24,10 +25,10 @@ export function TestGateway() {
   const [response, setResponse] = useState<string | null>(null)
   const [loadingGateways, setLoadingGateways] = useState(false)
 
-  // Load gateway list
   useEffect(() => {
     setLoadingGateways(true)
-    gatewayApi.queryGatewayConfigList()
+    gatewayApi
+      .queryGatewayConfigList()
       .then((res) => {
         if (res.data.code === '0000') {
           setGateways(res.data.data || [])
@@ -37,25 +38,25 @@ export function TestGateway() {
       .finally(() => setLoadingGateways(false))
   }, [])
 
-  // Load auth keys when gateway changes
   useEffect(() => {
     if (!selectedGatewayId) {
       setAuthKeys([])
       setSelectedAuthKey('')
       return
     }
-    authApi.queryGatewayAuthListByGatewayId(selectedGatewayId)
+    authApi
+      .queryGatewayAuthListByGatewayId(selectedGatewayId)
       .then((res) => {
         if (res.data.code === '0000') {
           const keys = res.data.data || []
           setAuthKeys(keys)
-          // Auto-select first key
           if (keys.length > 0 && !selectedAuthKey) {
             setSelectedAuthKey(keys[0].apiKey)
           }
         }
       })
       .catch(() => toast.error('获取认证密钥失败'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedGatewayId])
 
   const handleTest = async () => {
@@ -103,27 +104,35 @@ export function TestGateway() {
     label: `${a.apiKey.substring(0, 20)}... (${a.rateLimit}次/小时)`,
   }))
 
+  const isError = response !== null && (response.startsWith('错误') || response.startsWith('异常'))
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">网关测试</h2>
-        <p className="text-sm text-muted-foreground mt-1">通过 LLM 对话模型测试网关功能</p>
-      </div>
+    <div className="space-y-7">
+      <PageHeader
+        icon={Play}
+        title="网关测试"
+        display="Playground"
+        meta="05 / Live Console"
+        description="通过 LLM 对话验证网关端到端连通性，实时调用工具并查看响应内容。"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Configuration */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Server className="h-4 w-4" />
-              测试配置
-            </CardTitle>
+          <CardHeader className="flex flex-row items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Server className="h-4 w-4" strokeWidth={2.5} />
+            </div>
+            <div>
+              <CardTitle className="text-[15px]">测试配置</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5 normal-case tracking-normal">配置网关、认证密钥与请求参数</p>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-5">
             <div className="space-y-2">
               <Label>选择网关 *</Label>
               {loadingGateways ? (
-                <Skeleton className="h-9 w-full" />
+                <Skeleton className="h-10 w-full" />
               ) : (
                 <Select
                   value={selectedGatewayId}
@@ -135,9 +144,14 @@ export function TestGateway() {
             </div>
 
             <div className="space-y-2">
-              <Label className="flex items-center gap-2"><Key className="h-3 w-3" />认证 API Key</Label>
+              <Label className="flex items-center gap-1.5">
+                <Key className="h-3 w-3" />
+                认证 API Key
+              </Label>
               {authKeys.length === 0 && selectedGatewayId ? (
-                <p className="text-xs text-muted-foreground">该网关暂无认证配置</p>
+                <div className="rounded-xl border border-dashed border-border/60 px-4 py-3 text-xs text-muted-foreground">
+                  该网关暂无认证配置
+                </div>
               ) : (
                 <Select
                   value={selectedAuthKey}
@@ -153,16 +167,22 @@ export function TestGateway() {
               <Input type="number" value={String(timeout)} onChange={(e) => setTimeout_(Number(e.target.value))} />
             </div>
 
-            <div className="flex items-center gap-2">
+            <label
+              htmlFor="reload"
+              className="group flex items-center gap-3 rounded-xl border border-border/60 bg-background/30 backdrop-blur-sm px-3.5 py-2.5 cursor-pointer hover:border-primary/40 hover:bg-background/50 transition-all"
+            >
               <input
                 type="checkbox"
                 id="reload"
                 checked={reload}
                 onChange={(e) => setReload(e.target.checked)}
-                className="h-4 w-4 rounded border-input text-primary focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+                className="h-4 w-4 rounded border-input text-primary focus-visible:ring-2 focus-visible:ring-primary/30 cursor-pointer accent-primary"
               />
-              <Label htmlFor="reload">重新加载 LLM 模型</Label>
-            </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-foreground leading-tight">重新加载 LLM 模型</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 normal-case">每次调用前强制刷新模型上下文</p>
+              </div>
+            </label>
 
             <div className="space-y-2">
               <Label>测试消息 *</Label>
@@ -170,41 +190,68 @@ export function TestGateway() {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="输入测试消息，例如：获取公司员工列表"
-                rows={4}
+                rows={5}
               />
             </div>
 
-            <Button onClick={handleTest} disabled={loading} className="w-full cursor-pointer">
+            <Button onClick={handleTest} disabled={loading} size="lg" className="w-full cursor-pointer">
               {loading ? (
-                <><RefreshCw className="h-4 w-4 animate-spin mr-2" />调用中...</>
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  调用中...
+                </>
               ) : (
-                <><Play className="h-4 w-4 mr-2" />发送测试请求</>
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  发送测试请求
+                </>
               )}
             </Button>
           </CardContent>
         </Card>
 
         {/* Response */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center justify-between">
-              <span>响应结果</span>
-              {response !== null && (
-                <Badge variant={response.startsWith('错误') || response.startsWith('异常') ? 'destructive' : 'success'}>
-                  {response.startsWith('错误') || response.startsWith('异常') ? '失败' : '成功'}
-                </Badge>
-              )}
-            </CardTitle>
+        <Card className="relative overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-aurora-3/10 text-aurora-3">
+                <Terminal className="h-4 w-4" strokeWidth={2.5} />
+              </div>
+              <div>
+                <CardTitle className="text-[15px]">响应结果</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5 normal-case tracking-normal">实时返回的 LLM 响应内容</p>
+              </div>
+            </div>
+            {response !== null && (
+              <Badge variant={isError ? 'destructive' : 'success'}>
+                <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${isError ? 'bg-destructive' : 'bg-success'}`} />
+                {isError ? '失败' : '成功'}
+              </Badge>
+            )}
           </CardHeader>
           <CardContent>
             {response === null ? (
-              <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                <Play className="h-10 w-10 mb-3 opacity-30" />
-                <p className="text-sm">点击发送按钮查看响应结果</p>
+              <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+                <div className="relative mb-5">
+                  <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-primary/40 to-aurora-3/40 blur-xl opacity-50" />
+                  <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl border border-border/60 bg-background/60 backdrop-blur-md">
+                    <Play className="h-9 w-9 text-primary/70" strokeWidth={1.5} />
+                  </div>
+                </div>
+                <p className="text-sm font-medium text-foreground">等待调用</p>
+                <p className="text-xs text-muted-foreground mt-1.5">点击发送按钮查看响应结果</p>
               </div>
             ) : (
-              <div className="bg-slate-950 text-slate-50 dark:bg-slate-900 dark:text-slate-100 dark:border dark:border-border rounded-lg p-4 font-mono text-sm whitespace-pre-wrap min-h-[200px] max-h-[500px] overflow-y-auto">
-                {response}
+              <div className="relative">
+                <div className="absolute left-3 right-3 top-2 flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-destructive/70" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-warning/70" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-success/70" />
+                  <span className="ml-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/60">response.txt</span>
+                </div>
+                <pre className="bg-background-deep dark:bg-[hsl(230_40%_3%)] text-foreground/90 rounded-2xl border border-border/60 px-4 pt-9 pb-4 font-mono text-xs whitespace-pre-wrap min-h-[280px] max-h-[520px] overflow-y-auto leading-relaxed">
+{response}
+                </pre>
               </div>
             )}
           </CardContent>
