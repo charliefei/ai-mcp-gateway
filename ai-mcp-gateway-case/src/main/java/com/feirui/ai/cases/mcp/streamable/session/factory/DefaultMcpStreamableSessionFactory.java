@@ -1,8 +1,9 @@
-package com.feirui.ai.cases.mcp.session.factory;
+package com.feirui.ai.cases.mcp.streamable.session.factory;
 
-import cn.bugstack.wrench.design.framework.tree.StrategyHandler;
-import com.feirui.ai.cases.mcp.session.node.RootNode;
+import com.feirui.ai.cases.mcp.streamable.session.node.RootNode;
 import com.feirui.ai.domain.session.model.valobj.SessionConfigVO;
+import cn.bugstack.wrench.design.framework.tree.StrategyHandler;
+import jakarta.annotation.Resource;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,15 +12,13 @@ import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
-import javax.annotation.Resource;
-
 /**
- * MCP 会话服务工厂
+ * MCP Streamable 会话服务工厂
  */
 @Service
-public class DefaultMcpSessionFactory {
+public class DefaultMcpStreamableSessionFactory {
 
-    @Resource(name = "mcpSessionRootNode")
+    @Resource(name = "mcpStreamableSessionRootNode")
     private RootNode rootNode;
 
     public StrategyHandler<String, DynamicContext, Flux<ServerSentEvent<String>>> strategyHandler() {
@@ -31,6 +30,8 @@ public class DefaultMcpSessionFactory {
     @AllArgsConstructor
     @NoArgsConstructor
     public static class DynamicContext {
+
+        private String gatewayId;
 
         private String apiKey;
 

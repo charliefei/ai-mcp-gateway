@@ -1,8 +1,8 @@
-package com.feirui.ai.cases.mcp.session.node;
+package com.feirui.ai.cases.mcp.sse.session.node;
 
 import cn.bugstack.wrench.design.framework.tree.StrategyHandler;
-import com.feirui.ai.cases.mcp.session.AbstractMcpSessionSupport;
-import com.feirui.ai.cases.mcp.session.factory.DefaultMcpSessionFactory;
+import com.feirui.ai.cases.mcp.sse.session.AbstractMcpSSESessionSupport;
+import com.feirui.ai.cases.mcp.sse.session.factory.DefaultMcpSSESessionFactory;
 import com.feirui.ai.domain.session.model.valobj.SessionConfigVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.codec.ServerSentEvent;
@@ -16,13 +16,13 @@ import javax.annotation.Resource;
  */
 @Slf4j
 @Service("mcpSessionSessionNode")
-public class SessionNode extends AbstractMcpSessionSupport {
+public class SSESessionNode extends AbstractMcpSSESessionSupport {
 
     @Resource(name = "mcpSessionEndNode")
     private EndNode endNode;
 
     @Override
-    protected Flux<ServerSentEvent<String>> doApply(String requestParameter, DefaultMcpSessionFactory.DynamicContext dynamicContext) throws Exception {
+    protected Flux<ServerSentEvent<String>> doApply(String requestParameter, DefaultMcpSSESessionFactory.DynamicContext dynamicContext) throws Exception {
         log.info("创建会话-SessionNode:{}", requestParameter);
 
         // 创建会话服务
@@ -35,7 +35,7 @@ public class SessionNode extends AbstractMcpSessionSupport {
     }
 
     @Override
-    public StrategyHandler<String, DefaultMcpSessionFactory.DynamicContext, Flux<ServerSentEvent<String>>> get(String requestParameter, DefaultMcpSessionFactory.DynamicContext dynamicContext) throws Exception {
+    public StrategyHandler<String, DefaultMcpSSESessionFactory.DynamicContext, Flux<ServerSentEvent<String>>> get(String requestParameter, DefaultMcpSSESessionFactory.DynamicContext dynamicContext) throws Exception {
         return endNode;
     }
 

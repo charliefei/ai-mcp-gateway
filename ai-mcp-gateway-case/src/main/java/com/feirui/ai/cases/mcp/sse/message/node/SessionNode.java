@@ -1,8 +1,8 @@
-package com.feirui.ai.cases.mcp.message.node;
+package com.feirui.ai.cases.mcp.sse.message.node;
 
 import cn.bugstack.wrench.design.framework.tree.StrategyHandler;
-import com.feirui.ai.cases.mcp.message.AbstractMcpMessageServiceSupport;
-import com.feirui.ai.cases.mcp.message.factory.DefaultMcpMessageFactory;
+import com.feirui.ai.cases.mcp.sse.message.AbstractMcpMessageServiceSupport;
+import com.feirui.ai.cases.mcp.sse.message.factory.DefaultMcpMessageFactory;
 import com.feirui.ai.domain.session.model.entity.HandleMessageCommandEntity;
 import com.feirui.ai.domain.session.model.valobj.SessionConfigVO;
 import lombok.extern.slf4j.Slf4j;

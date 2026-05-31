@@ -29,11 +29,11 @@ import java.util.UUID;
 @RequestMapping("/")
 public class McpGatewayController implements IMcpGatewayService {
 
-    @Resource
+    @Resource(name = "mcpSSESessionService")
     private IMcpSessionService mcpSessionService;
 
-    @Resource
-    private IMcpMessageService mcpMessageService;
+    @Resource(name = "mcpSSEMessageService")
+    private IMcpMessageService<Void> mcpMessageService;
 
     /**
      * 处理 sse 连接，创建会话

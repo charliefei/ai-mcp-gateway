@@ -16,4 +16,18 @@ public interface IMcpSessionService {
      */
     Flux<ServerSentEvent<String>> createMcpSession(String gatewayId, String apiKey) throws Exception;
 
+    /**
+     * 获取 MCP 会话服务
+     *
+     * @param sessionId 会话ID
+     * @return 流式响应
+     */
+    Flux<ServerSentEvent<String>> getMcpSession(String gatewayId, String apiKey, String sessionId) throws Exception;
+
+    /**
+     * 删除 MCP 会话服务
+     * @param sessionId – 会话ID
+     */
+    void deleteMcpSession(String sessionId);
+
 }

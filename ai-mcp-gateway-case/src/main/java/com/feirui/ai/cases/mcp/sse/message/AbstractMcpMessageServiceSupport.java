@@ -1,7 +1,7 @@
-package com.feirui.ai.cases.mcp.message;
+package com.feirui.ai.cases.mcp.sse.message;
 
 import cn.bugstack.wrench.design.framework.tree.AbstractMultiThreadStrategyRouter;
-import com.feirui.ai.cases.mcp.message.factory.DefaultMcpMessageFactory;
+import com.feirui.ai.cases.mcp.sse.message.factory.DefaultMcpMessageFactory;
 import com.feirui.ai.domain.session.model.entity.HandleMessageCommandEntity;
 import com.feirui.ai.domain.session.service.ISessionManagementService;
 import com.feirui.ai.domain.session.service.ISessionMessageService;

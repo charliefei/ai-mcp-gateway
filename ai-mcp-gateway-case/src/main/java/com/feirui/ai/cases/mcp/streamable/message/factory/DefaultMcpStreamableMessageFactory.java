@@ -1,9 +1,9 @@
-package com.feirui.ai.cases.mcp.message.factory;
+package com.feirui.ai.cases.mcp.streamable.message.factory;
 
-import cn.bugstack.wrench.design.framework.tree.StrategyHandler;
-import com.feirui.ai.cases.mcp.message.node.RootNode;
+import com.feirui.ai.cases.mcp.streamable.message.node.RootNode;
 import com.feirui.ai.domain.session.model.entity.HandleMessageCommandEntity;
 import com.feirui.ai.domain.session.model.valobj.SessionConfigVO;
+import cn.bugstack.wrench.design.framework.tree.StrategyHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,15 +14,15 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 
 /**
- * MCP会话消息工厂
+ * MCP Streamable 会话消息工厂
  */
 @Service
-public class DefaultMcpMessageFactory {
+public class DefaultMcpStreamableMessageFactory {
 
-    @Resource(name = "mcpMessageRootNode")
+    @Resource(name = "mcpStreamableMessageRootNode")
     private RootNode rootNode;
 
-    public StrategyHandler<HandleMessageCommandEntity, DefaultMcpMessageFactory.DynamicContext, ResponseEntity<Void>> strategyHandler() {
+    public StrategyHandler<HandleMessageCommandEntity, DynamicContext, ResponseEntity<?>> strategyHandler() {
         return rootNode;
     }
 

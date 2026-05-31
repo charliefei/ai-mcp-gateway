@@ -6,8 +6,8 @@ import org.springframework.http.ResponseEntity;
 /**
  * MCP 消息处理case层服务接口
  */
-public interface IMcpMessageService {
+public interface IMcpMessageService<T> {
 
-    ResponseEntity<Void> handleMessage(HandleMessageCommandEntity commandEntity) throws Exception;
+    ResponseEntity<T> handleMessage(HandleMessageCommandEntity commandEntity) throws Exception;
 
 }
