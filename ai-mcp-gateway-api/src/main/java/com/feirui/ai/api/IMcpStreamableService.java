@@ -19,7 +19,7 @@ public interface IMcpStreamableService {
     /**
      * 接收 MCP Streamable 请求并返回 JSON RPC 响应或 202 Accepted，优先使用 Mcp-Session-Id，兼容 query sessionId
      */
-    Mono<ResponseEntity<?>> handlePost(String gatewayId, String apiKey, String paramSessionId, String headerSessionId, String messageBody, HttpHeaders headers);
+    Mono<ResponseEntity<String>> handlePost(String gatewayId, String apiKey, String paramSessionId, String headerSessionId, String messageBody, HttpHeaders headers);
 
     /**
      * 接收 DELETE 请求，关闭会话，优先使用 Mcp-Session-Id，兼容 query sessionId

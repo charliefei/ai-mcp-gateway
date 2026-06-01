@@ -9,6 +9,7 @@ import cn.bugstack.wrench.design.framework.tree.StrategyHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
@@ -31,14 +32,26 @@ public class MessageHandlerNode extends AbstractMcpStreamableMessageServiceSuppo
         if (null != jsonrpcResponse) {
             String responseJson = objectMapper.writeValueAsString(jsonrpcResponse);
 
+            // 推送到 SSE sink（供 GET 监听者接收，保持向后兼容）
             SessionConfigVO sessionConfigVO = dynamicContext.getSessionConfigVO();
-            sessionConfigVO.getSink().tryEmitNext(ServerSentEvent.<String>builder()
-                    .id(sessionConfigVO.getSessionId())
-                    .event("message")
-                    .data(responseJson)
-                    .build());
+            if (sessionConfigVO != null && sessionConfigVO.getSink() != null) {
+                sessionConfigVO.getSink().tryEmitNext(ServerSentEvent.<String>builder()
+                        .id(sessionConfigVO.getSessionId())
+                        .event("message")
+                        .data(responseJson)
+                        .build());
+            }
+
+            // JSON-RPC Request（有 id）: 直接返回 200 + JSON 响应
+            // JSON-RPC Notification（有 method 无 id）: 返回 202 Accepted
+            if (requestParameter.getJsonrpcMessage() instanceof McpSchemaVO.JSONRPCRequest) {
+                return ResponseEntity.ok()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(responseJson);
+            }
         }
 
+        // Notification 或无需响应的消息：返回 202 Accepted（无 body）
         return ResponseEntity.accepted().build();
     }
 
