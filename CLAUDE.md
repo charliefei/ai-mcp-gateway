@@ -4,7 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-An MCP (Model Context Protocol) gateway that exposes HTTP/REST APIs as MCP-compatible tools. Clients connect via SSE, receive a message endpoint, then send JSON-RPC 2.0 requests (initialize, tools/list, tools/call, resources/list). The gateway translates tool calls into HTTP requests against configured backend APIs.
+An MCP (Model Context Protocol) gateway that exposes HTTP/REST APIs as MCP-compatible tools. Clients connect via **SSE** (legacy, two-step: open stream → POST to a message URL) or **Streamable HTTP** (GET/POST/DELETE on a single endpoint with `Mcp-Session-Id` header), then send JSON-RPC 2.0 requests (initialize, tools/list, tools/call, resources/list). The gateway translates tool calls into HTTP requests against configured backend APIs. The transport is selected per gateway via the `transport` field in `mcp_gateway`.
+
+## First-time Setup
+
+1. Create the MySQL database: `CREATE DATABASE ai_mcp_gateway_v2;` (no migrations are bundled)
+2. Set the env var: `export DASHSCOPE_API_KEY=...` (required only for LLM endpoints)
+3. Build once without tests: `mvn clean install -DskipTests`
+4. Start the app: `mvn spring-boot:run` (from repo root)
 
 ## Build & Run
 
@@ -15,7 +22,7 @@ mvn clean install
 # Build without tests
 mvn clean install -DskipTests
 
-# Run the application (from ai-mcp-gateway-app)
+# Run the application (from repo root, NOT from ai-mcp-gateway-app/)
 mvn spring-boot:run
 
 # Run with specific profile
@@ -48,6 +55,16 @@ npm run build
 
 **Required env vars**: `DASHSCOPE_API_KEY` (Alibaba Bailian/DashScope API key for LLM features)
 
+## Key Entry Points
+
+- Spring Boot main: `ai-mcp-gateway-app/src/main/java/.../Application.java`
+- JSON-RPC 2.0 schema (sealed interfaces + records): `McpSchemaVO` in `ai-mcp-gateway-domain` — defines `JSONRPCRequest`, `JSONRPCNotification`, `JSONRPCResponse`
+- SSE controller: `McpGatewayController` (trigger layer) — handles the legacy SSE transport at `/{gatewayId}/mcp/sse`
+- Streamable HTTP controller: `McpStreamableController` (trigger layer) — handles GET/POST/DELETE at `/{gatewayId}/mcp`
+- Session/message chain wiring (SSE): `DefaultMcpSessionFactory`, `DefaultMcpMessageFactory` in case layer (`com.feirui.ai.cases.mcp.sse.*`)
+- Session/message chain wiring (Streamable): `DefaultMcpStreamableSessionFactory`, `DefaultMcpStreamableMessageFactory` in case layer (`com.feirui.ai.cases.mcp.streamable.*`)
+- MyBatis mappers: `ai-mcp-gateway-app/src/main/resources/mybatis/mapper/`
+
 ## Architecture
 
 DDD (Domain-Driven Design) layered architecture using Maven modules:
@@ -68,12 +85,14 @@ DDD (Domain-Driven Design) layered architecture using Maven modules:
 ## Key Design Patterns
 
 ### Tree Strategy Pattern (case layer)
-Session creation and message handling use a chain-of-responsibility tree from the `xfg-wrench-starter-design-framework` library. Each flow is a chain of nodes:
+Session creation and message handling use a chain-of-responsibility tree from the `xfg-wrench-starter-design-framework` library. Each transport has its own session and message chains under `com.feirui.ai.cases.mcp.{sse,streamable}.*`:
 
-- **Session flow**: `RootNode` → `VerifyNode` (auth check) → `SessionNode` (create session) → `EndNode`
-- **Message flow**: `RootNode` (rate limit check) → `SessionNode` (resolve session) → `MessageHandlerNode` → specific handler
+- **Session flow (SSE)**: `RootNode` → `VerifyNode` (auth check) → `SessionNode` (create session) → `EndNode`
+- **Message flow (SSE)**: `RootNode` (rate limit check) → `SessionNode` (resolve session) → `MessageHandlerNode` → specific handler
+- **Session flow (Streamable)**: `RootNode` → `VerifyNode` → `StreamableSessionNode` → `EndNode`
+- **Message flow (Streamable)**: `RootNode` (rate limit + JSON-RPC `Response` short-circuit to 202) → branches to `InitializeNode` (for the `initialize` method) OR `SessionNode` → `MessageHandlerNode`
 
-Factories (`DefaultMcpSessionFactory`, `DefaultMcpMessageFactory`) wire the chains. Nodes extend abstract base classes and override `doApply()` + `get()` (next node).
+Factories (`DefaultMcpSessionFactory`, `DefaultMcpMessageFactory`, `DefaultMcpStreamableSessionFactory`, `DefaultMcpStreamableMessageFactory`) wire the chains. Nodes extend abstract base classes and override `doApply()` + `get()` (next node).
 
 ### Strategy Pattern (domain layer)
 - `SessionMessageHandlerMethodEnum` maps JSON-RPC method names to Spring bean handler names. `SessionMessageService` dispatches to the correct `IRequestHandler` implementation via a `Map<String, IRequestHandler>`.
@@ -88,13 +107,31 @@ Factories (`DefaultMcpSessionFactory`, `DefaultMcpMessageFactory`) wire the chai
 - **Tables**: `mcp_gateway_auth`, `mcp_gateway`, `mcp_gateway_tool`, `mcp_protocol_http`, `mcp_protocol_mapping`
 - **Connection pool**: HikariCP
 
-## SSE Endpoint Flow
+## Transports
 
-1. Client GETs `/{gatewayId}/mcp/sse?api_key=KEY` → creates session, returns SSE stream with `endpoint` event containing the message URL
-2. Client POSTs JSON-RPC to `/{gatewayId}/mcp/sse?sessionId=X&api_key=KEY` → gateway dispatches to appropriate handler
-3. Responses stream back over the SSE connection
+The gateway supports two MCP transports side-by-side, selectable per gateway via the `transport` field in `mcp_gateway` (values from `SessionTransportTypeEnumVO`: `sse`, `streamable`).
 
-The `api_key` query parameter is optional but required for gateways with auth enabled. Auth keys are managed via the admin API.
+### SSE transport (`McpGatewayController`, path `/{gatewayId}/mcp/sse`)
+
+1. Client GETs `/{gatewayId}/mcp/sse?api_key=KEY` → server creates session, returns SSE stream; first event is `endpoint` with the message URL, e.g. `/mcp/sse/messages?sessionId=<id>`
+2. Client POSTs JSON-RPC body to the message URL with `sessionId` and (if auth enabled) `api_key` query params
+3. Responses stream back over the original SSE connection
+
+### Streamable HTTP transport (`McpStreamableController`, path `/{gatewayId}/mcp`)
+
+1. `GET /{gatewayId}/mcp` (header `Mcp-Session-Id: <id>`, optional `?api_key=`) — opens an SSE listener stream bound to the existing session
+2. `POST /{gatewayId}/mcp` (header `Mcp-Session-Id: <id>`, optional `?api_key=`, body = JSON-RPC 2.0) — sends a request; **must include `Accept: application/json, text/event-stream`** or the server returns 406
+3. `DELETE /{gatewayId}/mcp` (header `Mcp-Session-Id: <id>`) — terminates the session
+
+Server response rules:
+- `Request` with `id` → JSON-RPC `Response` body (status 200)
+- `Notification` (no `id`) → `202 Accepted` with empty body
+- `Response` (client→server, e.g. progress ack) → `202 Accepted` with empty body
+- Any protocol/parse/auth error → JSON-RPC `Response` with `error` object and matching HTTP status (400/406/500)
+
+`Mcp-Session-Id` is the canonical session identifier; `?sessionId=` query param is accepted for compatibility with the SSE transport.
+
+The `api_key` is optional on both transports and required only for gateways with auth enabled. Auth keys are managed via the admin API.
 
 ## Configuration
 
@@ -115,6 +152,7 @@ The `api_key` query parameter is optional but required for gateways with auth en
 - `mvn spring-boot:run` must be run from repo root (parent POM), not from `ai-mcp-gateway-app/`
 - Database `ai_mcp_gateway_v2` must be created manually before first run (no schema migration scripts in repo)
 - `vite.config.ts` requires `@types/node` for `path` and `__dirname` — if builds fail with TS2307/TS2304, run `npm install --save-dev @types/node`
+- `application-dev.yml` contains a hardcoded MySQL password — do NOT copy dev credentials into test/prod profiles; use env vars
 
 ## Admin Management API
 
