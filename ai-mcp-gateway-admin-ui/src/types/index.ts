@@ -170,6 +170,8 @@ export interface GatewayLLMRequestDTO {
   timeout: number
   message: string
   reload: boolean
+  /** 传输协议：sse / streamable；不传默认 sse */
+  transport?: string
 }
 
 export interface GatewayLLMResponseDTO {

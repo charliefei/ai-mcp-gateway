@@ -7,6 +7,7 @@ import com.feirui.ai.domain.llm.service.ILLMService;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
+import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -50,7 +51,9 @@ public class LLMService implements ILLMService {
                 .openAiApi(openAiApi)
                 .defaultOptions(OpenAiChatOptions.builder()
                         .model(model)
-                        .toolCallbacks(buildToolCallback(mcpConfigVO))
+                        .toolCallbacks(isStreamable(mcpConfigVO)
+                                ? buildStreamableToolCallback(mcpConfigVO)
+                                : buildToolCallback(mcpConfigVO))
                         .build())
                 .build();
 
@@ -79,9 +82,45 @@ public class LLMService implements ILLMService {
         return new SyncMcpToolCallbackProvider(mcpSyncClient).getToolCallbacks();
     }
 
+    /**
+     * 构建 Streamable HTTP 传输的 MCP 工具回调
+     *
+     * @param mcpConfigVO mcp 配置
+     * @return 工具回调列表
+     */
+    public ToolCallback[] buildStreamableToolCallback(McpConfigVO mcpConfigVO) {
+        String streamableEndpoint = StringUtils.isNotBlank(mcpConfigVO.getStreamableEndpoint())
+                ? mcpConfigVO.getStreamableEndpoint()
+                : "/mcp";
+        if (StringUtils.isNotBlank(mcpConfigVO.getAuthApiKey())) {
+            streamableEndpoint += (streamableEndpoint.contains("?") ? "&" : "?") + "api_key=" + mcpConfigVO.getAuthApiKey();
+        }
+
+        HttpClientStreamableHttpTransport streamableTransport = HttpClientStreamableHttpTransport
+                .builder(mcpConfigVO.getBaseUri())
+                .endpoint(streamableEndpoint)
+                .build();
+
+        McpSyncClient mcpSyncClient = McpClient
+                .sync(streamableTransport)
+                .requestTimeout(Duration.ofMillis(mcpConfigVO.getTimeout())).build();
+        var initialize = mcpSyncClient.initialize();
+
+        log.info("tool streamable mcp initialize {}", initialize);
+
+        return new SyncMcpToolCallbackProvider(mcpSyncClient).getToolCallbacks();
+    }
+
     @Override
     public ChatModel getChatModel(String gatewayId) {
         return chatModelMap.get(gatewayId);
+    }
+
+    /**
+     * 判断是否为 streamable 传输
+     */
+    private boolean isStreamable(McpConfigVO mcpConfigVO) {
+        return "streamable".equalsIgnoreCase(mcpConfigVO.getTransport());
     }
 
 }

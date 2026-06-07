@@ -17,6 +17,7 @@ export function TestGateway() {
   const [authKeys, setAuthKeys] = useState<GatewayAuthDTO[]>([])
   const [selectedGatewayId, setSelectedGatewayId] = useState('')
   const [selectedAuthKey, setSelectedAuthKey] = useState('')
+  const [transport, setTransport] = useState('sse')
   const [timeout, setTimeout_] = useState(30000)
   const [message, setMessage] = useState('')
   const [reload, setReload] = useState(false)
@@ -56,7 +57,7 @@ export function TestGateway() {
         }
       })
       .catch(() => toast.error('获取认证密钥失败'))
-  }, [selectedGatewayId])
+  }, [selectedGatewayId, selectedAuthKey])
 
   const handleTest = async () => {
     if (!selectedGatewayId) {
@@ -76,6 +77,7 @@ export function TestGateway() {
         timeout,
         message: message.trim(),
         reload,
+        transport,
       })
       if (res.data.code === '0000') {
         setResponse(res.data.data?.content || '(空响应)')
@@ -146,6 +148,23 @@ export function TestGateway() {
                   placeholder="请选择认证密钥"
                 />
               )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>传输协议</Label>
+              <Select
+                value={transport}
+                onChange={(e) => setTransport(e.target.value)}
+                options={[
+                  { value: 'sse', label: 'SSE（默认）' },
+                  { value: 'streamable', label: 'Streamable HTTP' },
+                ]}
+              />
+              <p className="text-xs text-muted-foreground">
+                {transport === 'streamable'
+                  ? `将调用 ${window.location.origin}/api-gateway/{gatewayId}/mcp (Streamable HTTP)`
+                  : `将调用 /api-gateway/{gatewayId}/mcp/sse (SSE)`}
+              </p>
             </div>
 
             <div className="space-y-2">

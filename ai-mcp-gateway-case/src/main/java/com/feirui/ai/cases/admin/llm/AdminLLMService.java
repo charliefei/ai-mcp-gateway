@@ -34,12 +34,17 @@ public class AdminLLMService implements IAdminLLMService {
 
     @Override
     public GatewayLLMResponseDTO testCallGateway(GatewayLLMRequestDTO requestDTO) {
-        log.info("AdminLLMService.testCallGateway {} {}", requestDTO.getGatewayId(), requestDTO.getMessage());
+        log.info("AdminLLMService.testCallGateway gatewayId:{} transport:{} message:{}",
+                requestDTO.getGatewayId(), requestDTO.getTransport(), requestDTO.getMessage());
 
         String gatewayId = requestDTO.getGatewayId();
+        // 缺省沿用 SSE，避免对存量调用方产生影响
+        String transport = (requestDTO.getTransport() == null || requestDTO.getTransport().isEmpty())
+                ? "sse" : requestDTO.getTransport();
 
         String baseUrl = "http://localhost:" + port;
         String sseEndpoint = baseUrlContextPath + "/" + gatewayId + "/mcp/sse";
+        String streamableEndpoint = baseUrlContextPath + "/" + gatewayId + "/mcp";
 
         // 获取对话模型
         ChatModel chatModel = llmService.getChatModel(gatewayId);
@@ -50,6 +55,8 @@ public class AdminLLMService implements IAdminLLMService {
             McpConfigVO mcpConfigVO = McpConfigVO.builder()
                     .baseUri(baseUrl)
                     .sseEndpoint(sseEndpoint)
+                    .streamableEndpoint(streamableEndpoint)
+                    .transport(transport)
                     .authApiKey(requestDTO.getAuthApiKey())
                     .timeout(requestDTO.getTimeout())
                     .build();

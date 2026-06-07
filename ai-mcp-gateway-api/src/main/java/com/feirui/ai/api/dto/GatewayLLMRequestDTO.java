@@ -39,4 +39,9 @@ public class GatewayLLMRequestDTO {
      */
     private boolean reload = false;
 
+    /**
+     * 传输协议：sse - SSE 传输（默认）；streamable - Streamable HTTP 传输
+     */
+    private String transport = "sse";
+
 }
