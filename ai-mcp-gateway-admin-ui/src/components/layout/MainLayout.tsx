@@ -1,22 +1,46 @@
 import { Outlet } from 'react-router-dom'
+import { useState } from 'react'
 import { Sidebar } from './Sidebar'
+import { TopBar } from './TopBar'
 import { Toaster } from 'sonner'
+import { cn } from '@/lib/utils'
 
 export function MainLayout() {
+  const [collapsed, setCollapsed] = useState(false)
+
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar />
-      <main className="ml-56 min-h-screen">
-        <div className="p-8">
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
+      <div
+        className={cn(
+          'min-h-screen flex flex-col',
+          'transition-[margin] duration-300 ease-out-expo',
+          collapsed ? 'ml-[68px]' : 'ml-60'
+        )}
+      >
+        <TopBar />
+        <main className="flex-1 px-6 py-6 max-w-[1600px] w-full mx-auto">
           <Outlet />
-        </div>
-      </main>
+        </main>
+      </div>
       <Toaster
         position="top-right"
         richColors
         closeButton
+        visibleToasts={4}
+        expand
         toastOptions={{
-          duration: 3000,
+          duration: 3500,
+          classNames: {
+            toast:
+              'group toast group-[.toaster]:bg-card group-[.toaster]:text-card-foreground group-[.toaster]:border-border/60 group-[.toaster]:shadow-soft-lg group-[.toaster]:rounded-xl group-[.toaster]:backdrop-blur-xl',
+            description: 'group-[.toast]:text-muted-foreground group-[.toast]:text-xs',
+            actionButton:
+              'group-[.toast]:bg-primary group-[.toast]:text-primary-foreground',
+            cancelButton:
+              'group-[.toast]:bg-muted group-[.toast]:text-muted-foreground',
+            title: 'group-[.toast]:text-sm group-[.toast]:font-semibold',
+          },
         }}
       />
     </div>

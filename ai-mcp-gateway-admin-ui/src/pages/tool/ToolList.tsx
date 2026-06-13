@@ -1,35 +1,32 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogHeader,
   DialogTitle,
-  DialogContent,
+  DialogBody,
   DialogFooter,
+  DialogClose,
 } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { TableSkeleton } from '@/components/ui/skeleton'
+import {
+  PageHeader,
+  EmptyState,
+  SearchBar,
+  Pagination,
+  Toolbar,
+  FormField,
+  ConfirmDialog,
+} from '@/components/common'
 import { toolApi } from '@/lib/api'
 import { toast } from 'sonner'
-import { Plus, Search, RefreshCw, Wrench, Trash2 } from 'lucide-react'
+import { Plus, Wrench, RefreshCw, Pencil, Trash2, RotateCcw, Sparkles } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 import type { GatewayToolConfigDTO, GatewayToolSaveRequest } from '@/types'
-
-function EmptyState({ onCreate }: { onCreate: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
-        <Wrench className="h-8 w-8" />
-      </div>
-      <p className="text-sm font-medium">暂无工具配置数据</p>
-      <p className="text-xs text-muted-foreground mt-1">点击"新增工具"按钮创建第一条记录</p>
-      <Button variant="link" onClick={onCreate} className="mt-2 cursor-pointer">创建第一个工具</Button>
-    </div>
-  )
-}
 
 export function ToolList() {
   const [data, setData] = useState<GatewayToolConfigDTO[]>([])
@@ -53,6 +50,9 @@ export function ToolList() {
     protocolId: 0,
     protocolType: 'http',
   })
+
+  const [deleteTarget, setDeleteTarget] = useState<GatewayToolConfigDTO | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -82,6 +82,13 @@ export function ToolList() {
   }, [fetchData])
 
   const handleSearch = () => {
+    setPage(1)
+    fetchData()
+  }
+
+  const resetSearch = () => {
+    setSearchGatewayId('')
+    setSearchToolId('')
     setPage(1)
     fetchData()
   }
@@ -124,7 +131,9 @@ export function ToolList() {
     try {
       const res = await toolApi.saveGatewayToolConfig(form)
       if (res.data.code === '0000') {
-        toast.success(editItem ? '更新成功' : '创建成功')
+        toast.success(editItem ? '更新成功' : '创建成功', {
+          description: `工具 ${form.toolName} 已保存`,
+        })
         setDialogOpen(false)
         fetchData()
       } else {
@@ -137,18 +146,22 @@ export function ToolList() {
     }
   }
 
-  const handleDelete = async (item: GatewayToolConfigDTO) => {
-    if (!confirm(`确定要删除工具 "${item.toolName}" 吗？`)) return
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
     try {
-      const res = await toolApi.deleteGatewayToolConfig(item.gatewayId, item.toolId)
+      const res = await toolApi.deleteGatewayToolConfig(deleteTarget.gatewayId, deleteTarget.toolId)
       if (res.data.code === '0000') {
-        toast.success('删除成功')
+        toast.success('删除成功', { description: `工具 ${deleteTarget.toolName} 已删除` })
+        setDeleteTarget(null)
         fetchData()
       } else {
         toast.error(res.data.info || '删除失败')
       }
     } catch {
       toast.error('删除工具配置失败')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -156,179 +169,283 @@ export function ToolList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">工具配置</h2>
-          <p className="text-sm text-muted-foreground mt-1">管理网关下的 MCP 工具配置</p>
-        </div>
-        <Button onClick={openCreate} className="cursor-pointer">
-          <Plus className="h-4 w-4 mr-2" />
-          新增工具
-        </Button>
-      </div>
+      <PageHeader
+        title="工具配置"
+        description="管理 MCP 工具，将后端 HTTP 接口暴露给 LLM 客户端调用。"
+        icon={<Wrench className="h-5 w-5" />}
+        badge={<Badge variant="outline">{total} 条</Badge>}
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={fetchData} className="cursor-pointer">
+              <RefreshCw className="h-4 w-4" />
+              刷新
+            </Button>
+            <Button onClick={openCreate} className="cursor-pointer">
+              <Plus className="h-4 w-4" />
+              新增工具
+            </Button>
+          </>
+        }
+      />
 
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-3">
-            <Input
-              placeholder="网关ID"
-              value={searchGatewayId}
-              onChange={(e) => setSearchGatewayId(e.target.value)}
-              className="max-w-[200px]"
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            />
-            <Input
-              placeholder="工具ID"
-              value={searchToolId}
-              onChange={(e) => setSearchToolId(e.target.value)}
-              className="max-w-[200px]"
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            />
-            <Button variant="outline" onClick={handleSearch} className="cursor-pointer">
-              <Search className="h-4 w-4 mr-2" />
-              搜索
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => { setSearchGatewayId(''); setSearchToolId(''); setPage(1); }}
-              className="cursor-pointer"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              重置
-            </Button>
-          </div>
+        <CardContent className="p-5">
+          <SearchBar
+            value={searchGatewayId}
+            onChange={setSearchGatewayId}
+            onSearch={handleSearch}
+            onReset={resetSearch}
+            placeholder="搜索网关 ID..."
+          />
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            <Wrench className="h-4 w-4 inline mr-2" />
-            工具列表 ({total} 条记录)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+        <Toolbar
+          title="工具列表"
+          description="所有已注册的 MCP 工具"
+          count={total}
+          icon={<Wrench className="h-4 w-4" />}
+        />
+        <CardContent className="p-0">
           {initialLoad && loading ? (
-            <TableSkeleton columns={9} />
+            <div className="p-5">
+              <TableSkeleton columns={6} />
+            </div>
           ) : data.length === 0 ? (
-            <EmptyState onCreate={openCreate} />
+            <EmptyState
+              icon={<Wrench className="h-8 w-8" />}
+              title="还没有工具配置"
+              description="创建一个工具来暴露后端 HTTP 接口给 LLM 客户端。"
+              action={
+                <Button onClick={openCreate} className="cursor-pointer">
+                  <Plus className="h-4 w-4" />
+                  新建工具
+                </Button>
+              }
+            />
           ) : (
             <>
-              {loading && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
-                  <RefreshCw className="h-3 w-3 animate-spin" />
+              {loading && !initialLoad && (
+                <div className="flex items-center gap-2 px-5 py-2 text-xs text-muted-foreground border-b border-border/60 bg-primary/5">
+                  <RefreshCw className="h-3 w-3 animate-spin text-primary" />
                   刷新中...
                 </div>
               )}
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-3 px-4 font-medium">网关ID</th>
-                      <th className="text-left py-3 px-4 font-medium">工具ID</th>
-                      <th className="text-left py-3 px-4 font-medium">工具名称</th>
-                      <th className="text-left py-3 px-4 font-medium">工具类型</th>
-                      <th className="text-left py-3 px-4 font-medium">描述</th>
-                      <th className="text-left py-3 px-4 font-medium">版本</th>
-                      <th className="text-left py-3 px-4 font-medium">协议ID</th>
-                      <th className="text-left py-3 px-4 font-medium">协议类型</th>
-                      <th className="text-right py-3 px-4 font-medium">操作</th>
+                    <tr className="border-b border-border/60 bg-muted/20">
+                      <th className="text-left py-3 px-5 font-medium text-xs uppercase tracking-wider text-muted-foreground">工具</th>
+                      <th className="text-left py-3 px-5 font-medium text-xs uppercase tracking-wider text-muted-foreground">所属网关</th>
+                      <th className="text-left py-3 px-5 font-medium text-xs uppercase tracking-wider text-muted-foreground">类型 / 版本</th>
+                      <th className="text-left py-3 px-5 font-medium text-xs uppercase tracking-wider text-muted-foreground">协议</th>
+                      <th className="text-left py-3 px-5 font-medium text-xs uppercase tracking-wider text-muted-foreground">描述</th>
+                      <th className="text-right py-3 px-5 font-medium text-xs uppercase tracking-wider text-muted-foreground">操作</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.map((item) => (
-                      <tr key={`${item.gatewayId}-${item.toolId}`} className="border-b hover:bg-muted/50 transition-colors">
-                        <td className="py-3 px-4 font-mono text-xs">{item.gatewayId || '—'}</td>
-                        <td className="py-3 px-4">{item.toolId || '—'}</td>
-                        <td className="py-3 px-4 font-medium">{item.toolName || '—'}</td>
-                        <td className="py-3 px-4">
-                          <Badge>{item.toolType || '—'}</Badge>
+                      <tr
+                        key={`${item.gatewayId}-${item.toolId}`}
+                        className="group border-b border-border/40 last:border-0 hover:bg-primary/[0.03] transition-colors"
+                      >
+                        <td className="py-3.5 px-5">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={cn(
+                                'flex h-9 w-9 items-center justify-center rounded-lg shrink-0',
+                                'bg-gradient-to-br from-sky-500/15 to-sky-500/0',
+                                'text-sky-600 dark:text-sky-400 ring-1 ring-sky-500/20',
+                                'transition-transform duration-200 group-hover:scale-110'
+                              )}
+                            >
+                              <Wrench className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-foreground truncate">
+                                {item.toolName || '—'}
+                              </p>
+                              <p className="text-xs text-muted-foreground font-mono truncate">
+                                ID: {item.toolId}
+                              </p>
+                            </div>
+                          </div>
                         </td>
-                        <td className="py-3 px-4 text-muted-foreground max-w-[150px] truncate" title={item.toolDescription}>
+                        <td className="py-3.5 px-5">
+                          <Badge variant="outline" className="font-mono text-[10px]">
+                            {item.gatewayId || '—'}
+                          </Badge>
+                        </td>
+                        <td className="py-3.5 px-5">
+                          <div className="flex flex-col gap-1 items-start">
+                            <Badge variant={item.toolType === 'function' ? 'info' : 'secondary'}>
+                              {item.toolType || '—'}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground font-mono">
+                              v{item.toolVersion || '—'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-5">
+                          <Badge variant="ghost" className="font-mono">
+                            {item.protocolType || '—'} #{item.protocolId}
+                          </Badge>
+                        </td>
+                        <td className="py-3.5 px-5 text-muted-foreground max-w-[240px] truncate" title={item.toolDescription}>
                           {item.toolDescription || '—'}
                         </td>
-                        <td className="py-3 px-4 text-xs text-muted-foreground">{item.toolVersion || '—'}</td>
-                        <td className="py-3 px-4">{item.protocolId || '—'}</td>
-                        <td className="py-3 px-4">
-                          <Badge variant="secondary">{item.protocolType || '—'}</Badge>
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <Button variant="ghost" size="sm" onClick={() => openEdit(item)} className="cursor-pointer">编辑</Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(item)}
-                            className="text-red-500 hover:text-red-700 cursor-pointer"
-                            aria-label={`删除工具 ${item.toolName}`}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                        <td className="py-3.5 px-5 text-right">
+                          <div className="inline-flex items-center gap-0.5">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => openEdit(item)}
+                              className="cursor-pointer text-muted-foreground hover:text-primary"
+                              aria-label={`编辑 ${item.toolName}`}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => setDeleteTarget(item)}
+                              className="cursor-pointer text-muted-foreground hover:text-destructive"
+                              aria-label={`删除 ${item.toolName}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between pt-4">
-                  <span className="text-sm text-muted-foreground">第 {page} / {totalPages} 页</span>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)} className="cursor-pointer">上一页</Button>
-                    <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)} className="cursor-pointer">下一页</Button>
-                  </div>
-                </div>
-              )}
+              <div className="px-5 pb-4">
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  total={total}
+                  pageSize={rows}
+                  onPageChange={setPage}
+                />
+              </div>
             </>
           )}
         </CardContent>
       </Card>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent onClose={() => setDialogOpen(false)}>
-          <DialogHeader>
-            <DialogTitle>{editItem ? '编辑工具配置' : '新增工具配置'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 mt-4">
-            <div className="space-y-2">
-              <Label htmlFor="gatewayId">网关ID *</Label>
-              <Input id="gatewayId" value={form.gatewayId} onChange={(e) => setForm({ ...form, gatewayId: e.target.value })} disabled={!!editItem} placeholder="gateway_001" />
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen} size="lg">
+        <DialogClose onClose={() => setDialogOpen(false)} />
+        <DialogHeader>
+          <div className="flex items-center gap-3 pr-8">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 ring-1 ring-sky-500/20">
+              {editItem ? <Pencil className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="toolName">工具名称 *</Label>
-              <Input id="toolName" value={form.toolName} onChange={(e) => setForm({ ...form, toolName: e.target.value })} placeholder="JavaSDKMCPClient_getData" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="toolType">工具类型</Label>
-                <Select id="toolType" value={form.toolType} onChange={(e) => setForm({ ...form, toolType: e.target.value })}
-                  options={[{ value: 'function', label: 'function' }, { value: 'resource', label: 'resource' }]} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="toolVersion">工具版本</Label>
-                <Input id="toolVersion" value={form.toolVersion} onChange={(e) => setForm({ ...form, toolVersion: e.target.value })} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="toolDescription">工具描述</Label>
-              <Input id="toolDescription" value={form.toolDescription} onChange={(e) => setForm({ ...form, toolDescription: e.target.value })} placeholder="工具描述信息" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="protocolId">协议ID</Label>
-                <Input id="protocolId" type="number" value={String(form.protocolId)} onChange={(e) => setForm({ ...form, protocolId: Number(e.target.value) })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="protocolType">协议类型</Label>
-                <Input id="protocolType" value={form.protocolType} onChange={(e) => setForm({ ...form, protocolType: e.target.value })} placeholder="http" />
-              </div>
+            <div>
+              <DialogTitle>{editItem ? '编辑工具配置' : '新增工具配置'}</DialogTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {editItem ? `修改工具 ${editItem.toolName}` : '创建一个新的 MCP 工具'}
+              </p>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} className="cursor-pointer">取消</Button>
-            <Button onClick={handleSave} disabled={saving} className="cursor-pointer">{saving ? '保存中...' : '保存'}</Button>
-          </DialogFooter>
-        </DialogContent>
+        </DialogHeader>
+        <DialogBody>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="网关 ID" required htmlFor="gatewayId">
+              <Input
+                id="gatewayId"
+                value={form.gatewayId}
+                onChange={(e) => setForm({ ...form, gatewayId: e.target.value })}
+                disabled={!!editItem}
+                placeholder="gateway_001"
+                className="font-mono"
+              />
+            </FormField>
+            <FormField label="工具名称" required htmlFor="toolName">
+              <Input
+                id="toolName"
+                value={form.toolName}
+                onChange={(e) => setForm({ ...form, toolName: e.target.value })}
+                placeholder="JavaSDKMCPClient_getData"
+                className="font-mono"
+              />
+            </FormField>
+            <FormField label="工具类型" htmlFor="toolType">
+              <Select
+                id="toolType"
+                value={form.toolType}
+                onChange={(v) => setForm({ ...form, toolType: v })}
+                options={[
+                  { value: 'function', label: 'function' },
+                  { value: 'resource', label: 'resource' },
+                ]}
+              />
+            </FormField>
+            <FormField label="工具版本" htmlFor="toolVersion">
+              <Input
+                id="toolVersion"
+                value={form.toolVersion}
+                onChange={(e) => setForm({ ...form, toolVersion: e.target.value })}
+                className="font-mono"
+              />
+            </FormField>
+            <FormField label="协议 ID" htmlFor="protocolId">
+              <Input
+                id="protocolId"
+                type="number"
+                value={String(form.protocolId)}
+                onChange={(e) => setForm({ ...form, protocolId: Number(e.target.value) })}
+                className="font-mono"
+              />
+            </FormField>
+            <FormField label="协议类型" htmlFor="protocolType">
+              <Input
+                id="protocolType"
+                value={form.protocolType}
+                onChange={(e) => setForm({ ...form, protocolType: e.target.value })}
+                placeholder="http"
+                className="font-mono"
+              />
+            </FormField>
+            <FormField label="工具描述" htmlFor="toolDescription" className="sm:col-span-2">
+              <Input
+                id="toolDescription"
+                value={form.toolDescription}
+                onChange={(e) => setForm({ ...form, toolDescription: e.target.value })}
+                placeholder="工具的功能描述"
+              />
+            </FormField>
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setDialogOpen(false)} className="cursor-pointer">
+            取消
+          </Button>
+          <Button onClick={handleSave} disabled={saving} className="cursor-pointer min-w-[100px]">
+            {saving ? (
+              <>
+                <RotateCcw className="h-4 w-4 animate-spin" />
+                保存中
+              </>
+            ) : (
+              '保存'
+            )}
+          </Button>
+        </DialogFooter>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="删除工具配置？"
+        description={`确认删除工具 "${deleteTarget?.toolName}" 吗？该操作不可恢复。`}
+        variant="destructive"
+        confirmText="确认删除"
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
     </div>
   )
 }

@@ -33,10 +33,7 @@ function Tabs({ defaultValue, value, onValueChange, children, className }: TabsP
   }
 
   const registerTab = useCallback((v: string) => {
-    setTabValues((prev) => {
-      if (prev.includes(v)) return prev
-      return [...prev, v]
-    })
+    setTabValues((prev) => (prev.includes(v) ? prev : [...prev, v]))
   }, [])
 
   const focusTab = useCallback((v: string) => {
@@ -91,7 +88,7 @@ function TabsList({ className, children }: { className?: string; children: React
       role="tablist"
       aria-orientation="horizontal"
       className={cn(
-        'inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground',
+        'inline-flex h-10 items-center justify-center gap-1 rounded-lg border border-border bg-muted/40 p-1 text-muted-foreground backdrop-blur-sm',
         className
       )}
       onKeyDown={handleKeyDown}
@@ -101,7 +98,15 @@ function TabsList({ className, children }: { className?: string; children: React
   )
 }
 
-function TabsTrigger({ value, children, className }: { value: string; children: React.ReactNode; className?: string }) {
+function TabsTrigger({
+  value,
+  children,
+  className,
+}: {
+  value: string
+  children: React.ReactNode
+  className?: string
+}) {
   const ctx = React.useContext(TabsContext)
   if (!ctx) throw new Error('TabsTrigger must be used within Tabs')
 
@@ -118,8 +123,13 @@ function TabsTrigger({ value, children, className }: { value: string; children: 
       aria-controls={`tabpanel-${value}`}
       tabIndex={isActive ? 0 : -1}
       className={cn(
-        'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-pointer',
-        isActive && 'bg-background text-foreground shadow',
+        'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3.5 py-1.5 text-sm font-medium',
+        'transition-all duration-200 ease-out-expo',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        'disabled:pointer-events-none disabled:opacity-50 cursor-pointer',
+        isActive
+          ? 'bg-card text-foreground shadow-soft-sm'
+          : 'hover:bg-background/60 hover:text-foreground',
         className
       )}
       onClick={() => ctx.setActiveTab(value)}
@@ -129,12 +139,25 @@ function TabsTrigger({ value, children, className }: { value: string; children: 
   )
 }
 
-function TabsContent({ value, children, className }: { value: string; children: React.ReactNode; className?: string }) {
+function TabsContent({
+  value,
+  children,
+  className,
+}: {
+  value: string
+  children: React.ReactNode
+  className?: string
+}) {
   const ctx = React.useContext(TabsContext)
   if (!ctx) throw new Error('TabsContent must be used within Tabs')
   if (ctx.activeTab !== value) return null
   return (
-    <div role="tabpanel" id={`tabpanel-${value}`} aria-labelledby={`tab-${value}`} className={cn('mt-2', className)}>
+    <div
+      role="tabpanel"
+      id={`tabpanel-${value}`}
+      aria-labelledby={`tab-${value}`}
+      className={cn('mt-4 animate-in fade-in-0 slide-in-from-top-2', className)}
+    >
       {children}
     </div>
   )

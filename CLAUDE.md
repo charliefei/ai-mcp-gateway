@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-An MCP (Model Context Protocol) gateway that exposes HTTP/REST APIs as MCP-compatible tools. Clients connect via **SSE** (legacy, two-step: open stream → POST to a message URL) or **Streamable HTTP** (GET/POST/DELETE on a single endpoint with `Mcp-Session-Id` header), then send JSON-RPC 2.0 requests (initialize, tools/list, tools/call, resources/list). The gateway translates tool calls into HTTP requests against configured backend APIs. The transport is selected per gateway via the `transport` field in `mcp_gateway`.
+An MCP (Model Context Protocol) gateway that exposes HTTP/REST APIs as MCP-compatible tools. Clients connect via **SSE** (legacy) or **Streamable HTTP**, then send JSON-RPC 2.0 requests (initialize, tools/list, tools/call, resources/list). The gateway translates tool calls into HTTP requests against configured backend APIs. The transport is selected per gateway via the `transport` field in `mcp_gateway` (see **Transports** below for protocol details).
 
 ## First-time Setup
 
@@ -47,7 +47,7 @@ npm run build
 
 **Admin UI stack**: React 18, Vite 6, TypeScript 5.6, Tailwind CSS 3 (class-based dark mode), Radix UI primitives, lucide-react icons, sonner toasts, react-router-dom v7. Custom shadcn/ui-style components in `src/components/ui/`.
 
-**Admin UI page pattern**: All 5 CRUD pages follow the same structure: search bar (Card) → data table with record count (CardHeader/CardContent) → pagination (when totalPages > 1) → create/edit dialog. Each page manages its own state with useState/useCallback; the `useApi` hooks in `src/hooks/use-api.ts` are available but pages use manual state.
+**Admin UI page pattern**: All 6 pages (5 CRUD lists: `gateway`, `tool`, `protocol`, `auth`, `test` + 1 `Dashboard` at `/`) follow the same structure: search bar (Card) → data table with record count (CardHeader/CardContent) → pagination (when totalPages > 1) → create/edit dialog. Each page manages its own state with useState/useCallback; the `useApi` hooks in `src/hooks/use-api.ts` are available but pages use manual state — do not refactor a page to `useApi` without first checking the hook's surface.
 
 **Theme**: Dark mode via `darkMode: 'class'` in tailwind.config.ts. Toggle hook at `src/hooks/use-theme.ts` persists to localStorage, listens to system preference changes. CSS custom properties in `src/index.css` use HSL format (e.g., `271 81% 56%` for primary). Sidebar uses sidebar-specific tokens (`--sidebar-bg`, `--sidebar-fg`, etc.) defined in tailwind.config.ts.
 
@@ -135,6 +135,7 @@ The `api_key` is optional on both transports and required only for gateways with
 
 ## Configuration
 
+- `application.yml` — base config; active profile is selected by `SPRING_PROFILES_ACTIVE` env var (or `mvn spring-boot:run -Dspring-boot.run.profiles=<name>`)
 - `application-dev.yml` — local dev (MySQL at 127.0.0.1:3306, database `ai_mcp_gateway_v2`)
 - `application-test.yml`, `application-prod.yml` — other environments
 - Spring AI configured for OpenAI-compatible endpoints against Alibaba Bailian/DashScope (`qwen3.6-flash` model)
@@ -165,6 +166,16 @@ An operations management subsystem at `/admin/` provides CRUD management for gat
 - **LLM test call**: `test_call_gateway` — sends a test request through the gateway to verify end-to-end connectivity
 
 Triggers route to case-layer admin services (`IAdminGatewayService`, `IAdminAuthService`, `IAdminProtocolService`, `IAdminManageService`, `IAdminLLMService`), which delegate to domain services in `domain.gateway`, `domain.admin`, and `domain.llm` packages.
+
+## Admin UI (ai-mcp-gateway-admin-ui)
+
+- **Layout files**: `src/components/layout/` holds `MainLayout.tsx` (route shell), `Sidebar.tsx` (left nav), and `TopBar.tsx` (header bar). New layout chrome goes here — not into individual pages.
+- **UI primitive pattern**: All shared components in `src/components/ui/` follow the shadcn/ui pattern — Radix primitive + hand-rolled Tailwind styling. New composite components should extend the same pattern; do not introduce parallel component systems.
+- **Composite widgets (`src/components/common/`)**: Reusable page-level widgets — `FormField`, `PageHeader`, `SearchBar`, `Pagination`, `StatusDot`, `MethodPill`, `ConfirmDialog`, `EmptyState`, `GradientText`, `Toolbar`, `ApiKeyCell` (re-exported from `index.ts`). Use these for any element that appears on more than one page; do not re-implement them inline.
+- **Select dropdowns**: ALWAYS use `@radix-ui/react-select` (already installed). Do NOT hand-roll a `<select>` wrapper or use `@floating-ui/react` — both have been tried and failed: native `position: fixed` is hijacked by the Dialog's `transform` scale/translate animations; Floating UI's `autoUpdate` did not flip reliably inside a Dialog portal. `src/components/ui/select.tsx` exposes a `FlatSelect` shim over Radix primitives that accepts the flat `options` API — call sites pass `{ value, onChange, options }` unchanged.
+- **Re-export pattern when swapping implementations**: When replacing the implementation of a UI primitive, keep the existing export name via `export { NewImpl as OldName }` so call sites don't need to change. Example: `export { FlatSelect as Select }`.
+- **Admin UI type/build checks**: `npx tsc --noEmit` (type check), `npx vite build` (production build). There is no lint config — these two commands are the verification surface.
+- **`FormField` label is `ReactNode`**: `FormField` in `src/components/common/FormField.tsx` accepts `label?: ReactNode`, so icon-prefixed labels work: `<FormField label={<span className="flex items-center gap-1.5"><Key className="h-3 w-3" /> 认证 API Key</span>}>`.
 
 ## Key Dependencies
 

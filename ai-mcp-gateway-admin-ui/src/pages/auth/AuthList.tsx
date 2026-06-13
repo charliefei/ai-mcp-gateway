@@ -1,33 +1,33 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogHeader,
   DialogTitle,
-  DialogContent,
+  DialogBody,
   DialogFooter,
+  DialogClose,
 } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
 import { TableSkeleton } from '@/components/ui/skeleton'
+import {
+  PageHeader,
+  EmptyState,
+  SearchBar,
+  Pagination,
+  Toolbar,
+  FormField,
+  ConfirmDialog,
+  ApiKeyCell,
+  StatusDot,
+} from '@/components/common'
 import { authApi } from '@/lib/api'
 import { toast } from 'sonner'
-import { Plus, Search, RefreshCw, Shield, Trash2 } from 'lucide-react'
+import { Plus, Shield, RefreshCw, Trash2, Sparkles, RotateCcw, Key, Gauge, Clock } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 import type { GatewayAuthDTO, GatewayAuthSaveRequest } from '@/types'
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
-        <Shield className="h-8 w-8" />
-      </div>
-      <p className="text-sm font-medium">暂无认证配置数据</p>
-      <p className="text-xs text-muted-foreground mt-1">点击"新增认证"按钮创建第一条记录</p>
-    </div>
-  )
-}
 
 export function AuthList() {
   const [data, setData] = useState<GatewayAuthDTO[]>([])
@@ -45,6 +45,9 @@ export function AuthList() {
     rateLimit: 1000,
     expireTime: '',
   })
+
+  const [deleteTarget, setDeleteTarget] = useState<GatewayAuthDTO | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -77,6 +80,12 @@ export function AuthList() {
     fetchData()
   }
 
+  const resetSearch = () => {
+    setSearchGatewayId('')
+    setPage(1)
+    fetchData()
+  }
+
   const openCreate = () => {
     setForm({ gatewayId: '', rateLimit: 1000, expireTime: '' })
     setDialogOpen(true)
@@ -91,7 +100,7 @@ export function AuthList() {
     try {
       const res = await authApi.saveGatewayAuth(form)
       if (res.data.code === '0000') {
-        toast.success('保存成功')
+        toast.success('保存成功', { description: `网关 ${form.gatewayId} 的认证配置已创建` })
         setDialogOpen(false)
         fetchData()
       } else {
@@ -104,23 +113,27 @@ export function AuthList() {
     }
   }
 
-  const handleDelete = async (gatewayId: string) => {
-    if (!confirm(`确定要删除网关 "${gatewayId}" 的认证配置吗？`)) return
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
     try {
-      const res = await authApi.deleteGatewayAuth(gatewayId)
+      const res = await authApi.deleteGatewayAuth(deleteTarget.gatewayId)
       if (res.data.code === '0000') {
-        toast.success('删除成功')
+        toast.success('删除成功', { description: `${deleteTarget.gatewayId} 的认证配置已删除` })
+        setDeleteTarget(null)
         fetchData()
       } else {
         toast.error(res.data.info || '删除失败')
       }
     } catch {
       toast.error('删除认证配置失败')
+    } finally {
+      setDeleting(false)
     }
   }
 
   const formatDate = (dateStr: string) => {
-    if (!dateStr) return '—'
+    if (!dateStr) return '永不过期'
     try {
       return new Date(dateStr).toLocaleString('zh-CN')
     } catch {
@@ -128,140 +141,271 @@ export function AuthList() {
     }
   }
 
+  const isExpired = (dateStr: string) => {
+    if (!dateStr) return false
+    try {
+      return new Date(dateStr).getTime() < Date.now()
+    } catch {
+      return false
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / rows))
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">认证配置</h2>
-          <p className="text-sm text-muted-foreground mt-1">管理网关 API Key 认证与速率限制</p>
-        </div>
-        <Button onClick={openCreate} className="cursor-pointer">
-          <Plus className="h-4 w-4 mr-2" />
-          新增认证
-        </Button>
-      </div>
+      <PageHeader
+        title="认证配置"
+        description="管理网关的 API Key 认证与速率限制，确保接口安全。"
+        icon={<Shield className="h-5 w-5" />}
+        badge={<Badge variant="outline">{total} 条</Badge>}
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={fetchData} className="cursor-pointer">
+              <RefreshCw className="h-4 w-4" />
+              刷新
+            </Button>
+            <Button onClick={openCreate} className="cursor-pointer">
+              <Plus className="h-4 w-4" />
+              新增认证
+            </Button>
+          </>
+        }
+      />
 
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-3">
-            <Input
-              placeholder="网关ID"
-              value={searchGatewayId}
-              onChange={(e) => setSearchGatewayId(e.target.value)}
-              className="max-w-[220px]"
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            />
-            <Button variant="outline" onClick={handleSearch} className="cursor-pointer">
-              <Search className="h-4 w-4 mr-2" />搜索
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => { setSearchGatewayId(''); setPage(1); }}
-              className="cursor-pointer"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />重置
-            </Button>
-          </div>
+        <CardContent className="p-5">
+          <SearchBar
+            value={searchGatewayId}
+            onChange={setSearchGatewayId}
+            onSearch={handleSearch}
+            onReset={resetSearch}
+            placeholder="搜索网关 ID..."
+          />
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            <Shield className="h-4 w-4 inline mr-2" />
-            认证列表 ({total} 条记录)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+        <Toolbar
+          title="认证列表"
+          description="所有网关的 API Key 与限流配置"
+          count={total}
+          icon={<Shield className="h-4 w-4" />}
+        />
+        <CardContent className="p-0">
           {initialLoad && loading ? (
-            <TableSkeleton columns={5} />
+            <div className="p-5">
+              <TableSkeleton columns={4} />
+            </div>
           ) : data.length === 0 ? (
-            <EmptyState />
+            <EmptyState
+              icon={<Shield className="h-8 w-8" />}
+              title="还没有认证配置"
+              description="为网关添加 API Key 与速率限制，确保接口访问安全。"
+              action={
+                <Button onClick={openCreate} className="cursor-pointer">
+                  <Plus className="h-4 w-4" />
+                  新建认证
+                </Button>
+              }
+            />
           ) : (
             <>
+              {loading && !initialLoad && (
+                <div className="flex items-center gap-2 px-5 py-2 text-xs text-muted-foreground border-b border-border/60 bg-primary/5">
+                  <RefreshCw className="h-3 w-3 animate-spin text-primary" />
+                  刷新中...
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-3 px-4 font-medium">网关ID</th>
-                      <th className="text-left py-3 px-4 font-medium">API Key</th>
-                      <th className="text-left py-3 px-4 font-medium">速率限制(次/小时)</th>
-                      <th className="text-left py-3 px-4 font-medium">过期时间</th>
-                      <th className="text-right py-3 px-4 font-medium">操作</th>
+                    <tr className="border-b border-border/60 bg-muted/20">
+                      <th className="text-left py-3 px-5 font-medium text-xs uppercase tracking-wider text-muted-foreground">网关</th>
+                      <th className="text-left py-3 px-5 font-medium text-xs uppercase tracking-wider text-muted-foreground">API Key</th>
+                      <th className="text-left py-3 px-5 font-medium text-xs uppercase tracking-wider text-muted-foreground">速率限制</th>
+                      <th className="text-left py-3 px-5 font-medium text-xs uppercase tracking-wider text-muted-foreground">过期时间</th>
+                      <th className="text-right py-3 px-5 font-medium text-xs uppercase tracking-wider text-muted-foreground">操作</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.map((item) => (
-                      <tr key={item.gatewayId} className="border-b hover:bg-muted/50 transition-colors">
-                        <td className="py-3 px-4 font-mono text-xs">{item.gatewayId || '—'}</td>
-                        <td className="py-3 px-4 font-mono text-xs max-w-[300px] truncate" title={item.apiKey}>
-                          {item.apiKey || '—'}
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge variant={item.rateLimit > 0 ? 'default' : 'secondary'}>
-                            {item.rateLimit || '无限制'}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4 text-xs text-muted-foreground">{formatDate(item.expireTime)}</td>
-                        <td className="py-3 px-4 text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(item.gatewayId)}
-                            className="text-red-500 hover:text-red-700 cursor-pointer"
-                            aria-label={`删除 ${item.gatewayId} 的认证配置`}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
+                    {data.map((item) => {
+                      const expired = isExpired(item.expireTime)
+                      return (
+                        <tr
+                          key={item.gatewayId}
+                          className="group border-b border-border/40 last:border-0 hover:bg-primary/[0.03] transition-colors"
+                        >
+                          <td className="py-3.5 px-5">
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={cn(
+                                  'flex h-9 w-9 items-center justify-center rounded-lg shrink-0',
+                                  'bg-gradient-to-br from-amber-500/15 to-amber-500/0',
+                                  'text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/20',
+                                  'transition-transform duration-200 group-hover:scale-110'
+                                )}
+                              >
+                                <Shield className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <p className="font-semibold text-foreground font-mono">
+                                  {item.gatewayId || '—'}
+                                </p>
+                                <p className="text-xs text-muted-foreground">认证网关</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-5">
+                            <ApiKeyCell value={item.apiKey} />
+                          </td>
+                          <td className="py-3.5 px-5">
+                            <div className="flex items-center gap-2">
+                              <Gauge className="h-3.5 w-3.5 text-muted-foreground" />
+                              {item.rateLimit > 0 ? (
+                                <Badge variant="info">{item.rateLimit} 次/小时</Badge>
+                              ) : (
+                                <Badge variant="ghost">无限制</Badge>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-5">
+                            <div className="flex items-center gap-2 text-xs">
+                              {item.expireTime ? (
+                                <>
+                                  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                                  <span className="text-muted-foreground tabular-nums">
+                                    {formatDate(item.expireTime)}
+                                  </span>
+                                  {expired ? (
+                                    <Badge variant="destructive">已过期</Badge>
+                                  ) : (
+                                    <Badge variant="success">
+                                      <StatusDot status="online" showLabel={false} />
+                                      有效
+                                    </Badge>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-muted-foreground">永不过期</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-5 text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => setDeleteTarget(item)}
+                              className="cursor-pointer text-muted-foreground hover:text-destructive"
+                              aria-label={`删除 ${item.gatewayId} 的认证配置`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between pt-4">
-                  <span className="text-sm text-muted-foreground">第 {page} / {totalPages} 页</span>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)} className="cursor-pointer">上一页</Button>
-                    <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)} className="cursor-pointer">下一页</Button>
-                  </div>
-                </div>
-              )}
+              <div className="px-5 pb-4">
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  total={total}
+                  pageSize={rows}
+                  onPageChange={setPage}
+                />
+              </div>
             </>
           )}
         </CardContent>
       </Card>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent onClose={() => setDialogOpen(false)}>
-          <DialogHeader>
-            <DialogTitle>新增认证配置</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 mt-4">
-            <div className="space-y-2">
-              <Label htmlFor="gatewayId">网关ID *</Label>
-              <Input id="gatewayId" value={form.gatewayId} onChange={(e) => setForm({ ...form, gatewayId: e.target.value })} placeholder="gateway_001" />
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen} size="md">
+        <DialogClose onClose={() => setDialogOpen(false)} />
+        <DialogHeader>
+          <div className="flex items-center gap-3 pr-8">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/20">
+              <Sparkles className="h-4 w-4" />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="rateLimit">速率限制（次/小时）</Label>
-              <Input id="rateLimit" type="number" value={String(form.rateLimit)} onChange={(e) => setForm({ ...form, rateLimit: Number(e.target.value) })} placeholder="1000" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="expireTime">过期时间</Label>
-              <Input id="expireTime" type="datetime-local" value={form.expireTime} onChange={(e) => setForm({ ...form, expireTime: e.target.value })} />
+            <div>
+              <DialogTitle>新增认证配置</DialogTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                为网关创建 API Key 认证凭据
+              </p>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} className="cursor-pointer">取消</Button>
-            <Button onClick={handleSave} disabled={saving} className="cursor-pointer">
-              {saving ? '保存中...' : '保存'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
+        </DialogHeader>
+        <DialogBody>
+          <div className="space-y-4">
+            <FormField label="网关 ID" required htmlFor="gatewayId">
+              <Input
+                id="gatewayId"
+                value={form.gatewayId}
+                onChange={(e) => setForm({ ...form, gatewayId: e.target.value })}
+                placeholder="gateway_001"
+                className="font-mono"
+              />
+            </FormField>
+            <FormField
+              label="速率限制（次/小时）"
+              htmlFor="rateLimit"
+              hint="设为 0 表示无限制"
+            >
+              <Input
+                id="rateLimit"
+                type="number"
+                value={String(form.rateLimit)}
+                onChange={(e) => setForm({ ...form, rateLimit: Number(e.target.value) })}
+                placeholder="1000"
+              />
+            </FormField>
+            <FormField
+              label="过期时间"
+              htmlFor="expireTime"
+              hint="留空表示永不过期"
+            >
+              <Input
+                id="expireTime"
+                type="datetime-local"
+                value={form.expireTime}
+                onChange={(e) => setForm({ ...form, expireTime: e.target.value })}
+              />
+            </FormField>
+            <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
+              <Key className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+              <p>API Key 将在保存时由系统自动生成并返回。</p>
+            </div>
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setDialogOpen(false)} className="cursor-pointer">
+            取消
+          </Button>
+          <Button onClick={handleSave} disabled={saving} className="cursor-pointer min-w-[100px]">
+            {saving ? (
+              <>
+                <RotateCcw className="h-4 w-4 animate-spin" />
+                保存中
+              </>
+            ) : (
+              '保存'
+            )}
+          </Button>
+        </DialogFooter>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="删除认证配置？"
+        description={`确认删除网关 "${deleteTarget?.gatewayId}" 的认证配置吗？该操作不可恢复。`}
+        variant="destructive"
+        confirmText="确认删除"
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
     </div>
   )
 }

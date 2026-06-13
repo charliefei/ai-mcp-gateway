@@ -1,35 +1,33 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogHeader,
   DialogTitle,
-  DialogContent,
+  DialogBody,
   DialogFooter,
+  DialogClose,
 } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { TableSkeleton } from '@/components/ui/skeleton'
+import {
+  PageHeader,
+  EmptyState,
+  SearchBar,
+  Pagination,
+  Toolbar,
+  FormField,
+  ConfirmDialog,
+  StatusDot,
+} from '@/components/common'
 import { gatewayApi } from '@/lib/api'
 import { toast } from 'sonner'
-import { Plus, Search, RefreshCw, Server } from 'lucide-react'
+import { Plus, Server, RefreshCw, Pencil, Trash2, RotateCcw, Sparkles } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 import type { GatewayConfigDTO, GatewayConfigSaveRequest } from '@/types'
-
-function EmptyState({ onCreate }: { onCreate: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
-        <Server className="h-8 w-8" />
-      </div>
-      <p className="text-sm font-medium">暂无网关配置数据</p>
-      <p className="text-xs text-muted-foreground mt-1">点击"新增网关"按钮创建第一条记录</p>
-      <Button variant="link" onClick={onCreate} className="mt-2 cursor-pointer">创建第一个网关</Button>
-    </div>
-  )
-}
 
 export function GatewayList() {
   const [data, setData] = useState<GatewayConfigDTO[]>([])
@@ -52,6 +50,9 @@ export function GatewayList() {
     auth: 1,
     status: 1,
   })
+
+  const [deleteTarget, setDeleteTarget] = useState<GatewayConfigDTO | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -81,6 +82,13 @@ export function GatewayList() {
   }, [fetchData])
 
   const handleSearch = () => {
+    setPage(1)
+    fetchData()
+  }
+
+  const resetSearch = () => {
+    setSearchGatewayId('')
+    setSearchGatewayName('')
     setPage(1)
     fetchData()
   }
@@ -120,7 +128,9 @@ export function GatewayList() {
     try {
       const res = await gatewayApi.saveGatewayConfig(form)
       if (res.data.code === '0000') {
-        toast.success(editItem ? '更新成功' : '创建成功')
+        toast.success(editItem ? '更新成功' : '创建成功', {
+          description: `网关 ${form.gatewayId} 已保存`,
+        })
         setDialogOpen(false)
         fetchData()
       } else {
@@ -133,217 +143,312 @@ export function GatewayList() {
     }
   }
 
+  // Note: backend may not expose a delete gateway endpoint, this is a placeholder UX.
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      toast.info('请通过后端接口删除网关配置')
+      setDeleteTarget(null)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / rows))
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">网关配置</h2>
-          <p className="text-sm text-muted-foreground mt-1">管理所有网关实例的配置信息</p>
-        </div>
-        <Button onClick={openCreate} className="cursor-pointer">
-          <Plus className="h-4 w-4 mr-2" />
-          新增网关
-        </Button>
-      </div>
-
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-3">
-            <Input
-              placeholder="网关ID"
-              value={searchGatewayId}
-              onChange={(e) => setSearchGatewayId(e.target.value)}
-              className="max-w-[200px]"
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            />
-            <Input
-              placeholder="网关名称"
-              value={searchGatewayName}
-              onChange={(e) => setSearchGatewayName(e.target.value)}
-              className="max-w-[200px]"
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            />
-            <Button variant="outline" onClick={handleSearch} className="cursor-pointer">
-              <Search className="h-4 w-4 mr-2" />
-              搜索
-            </Button>
+      <PageHeader
+        title="网关配置"
+        description="管理所有 MCP 网关实例，每个网关拥有独立的协议版本、鉴权与状态。"
+        icon={<Server className="h-5 w-5" />}
+        badge={<Badge variant="outline">{total} 条</Badge>}
+        actions={
+          <>
             <Button
-              variant="ghost"
-              onClick={() => { setSearchGatewayId(''); setSearchGatewayName(''); setPage(1); }}
+              variant="outline"
+              size="sm"
+              onClick={fetchData}
               className="cursor-pointer"
             >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              重置
+              <RefreshCw className="h-4 w-4" />
+              刷新
             </Button>
-          </div>
+            <Button onClick={openCreate} className="cursor-pointer">
+              <Plus className="h-4 w-4" />
+              新增网关
+            </Button>
+          </>
+        }
+      />
+
+      <Card>
+        <CardContent className="p-5">
+          <SearchBar
+            value={searchGatewayId}
+            onChange={setSearchGatewayId}
+            onSearch={handleSearch}
+            onReset={resetSearch}
+            placeholder="搜索网关 ID..."
+          />
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            <Server className="h-4 w-4 inline mr-2" />
-            网关列表 ({total} 条记录)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+        <Toolbar
+          title="网关列表"
+          description="所有注册的 MCP 网关实例"
+          count={total}
+          icon={<Server className="h-4 w-4" />}
+        />
+        <CardContent className="p-0">
           {initialLoad && loading ? (
-            <TableSkeleton columns={7} />
+            <div className="p-5">
+              <TableSkeleton columns={6} />
+            </div>
           ) : data.length === 0 ? (
-            <EmptyState onCreate={openCreate} />
+            <EmptyState
+              icon={<Server className="h-8 w-8" />}
+              title="还没有网关配置"
+              description="创建你的第一个 MCP 网关实例，开始管理工具与协议。"
+              action={
+                <Button onClick={openCreate} className="cursor-pointer">
+                  <Plus className="h-4 w-4" />
+                  新建网关
+                </Button>
+              }
+            />
           ) : (
             <>
-              {loading && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
-                  <RefreshCw className="h-3 w-3 animate-spin" />
+              {loading && !initialLoad && (
+                <div className="flex items-center gap-2 px-5 py-2 text-xs text-muted-foreground border-b border-border/60 bg-primary/5">
+                  <RefreshCw className="h-3 w-3 animate-spin text-primary" />
                   刷新中...
                 </div>
               )}
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-3 px-4 font-medium">网关ID</th>
-                      <th className="text-left py-3 px-4 font-medium">网关名称</th>
-                      <th className="text-left py-3 px-4 font-medium">描述</th>
-                      <th className="text-left py-3 px-4 font-medium">版本</th>
-                      <th className="text-left py-3 px-4 font-medium">认证状态</th>
-                      <th className="text-left py-3 px-4 font-medium">校验状态</th>
-                      <th className="text-right py-3 px-4 font-medium">操作</th>
+                    <tr className="border-b border-border/60 bg-muted/20">
+                      <th className="text-left py-3 px-5 font-medium text-xs uppercase tracking-wider text-muted-foreground">网关</th>
+                      <th className="text-left py-3 px-5 font-medium text-xs uppercase tracking-wider text-muted-foreground">协议版本</th>
+                      <th className="text-left py-3 px-5 font-medium text-xs uppercase tracking-wider text-muted-foreground">状态</th>
+                      <th className="text-left py-3 px-5 font-medium text-xs uppercase tracking-wider text-muted-foreground">校验</th>
+                      <th className="text-left py-3 px-5 font-medium text-xs uppercase tracking-wider text-muted-foreground">描述</th>
+                      <th className="text-right py-3 px-5 font-medium text-xs uppercase tracking-wider text-muted-foreground">操作</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.map((item) => (
-                      <tr key={item.gatewayId} className="border-b hover:bg-muted/50 transition-colors">
-                        <td className="py-3 px-4 font-mono text-xs">{item.gatewayId || '—'}</td>
-                        <td className="py-3 px-4 font-medium">{item.gatewayName || '—'}</td>
-                        <td className="py-3 px-4 text-muted-foreground max-w-[200px] truncate" title={item.gatewayDesc}>
-                          {item.gatewayDesc || '—'}
+                    {data.map((item, idx) => (
+                      <tr
+                        key={item.gatewayId}
+                        className={cn(
+                          'group border-b border-border/40 last:border-0',
+                          'transition-colors duration-150',
+                          'hover:bg-primary/[0.03]'
+                        )}
+                      >
+                        <td className="py-3.5 px-5">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={cn(
+                                'flex h-9 w-9 items-center justify-center rounded-lg shrink-0',
+                                'bg-gradient-to-br from-primary/15 to-primary/0',
+                                'text-primary ring-1 ring-primary/20',
+                                'transition-transform duration-200 group-hover:scale-110'
+                              )}
+                            >
+                              <Server className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-foreground truncate">
+                                {item.gatewayName || '—'}
+                              </p>
+                              <p className="text-xs text-muted-foreground font-mono truncate">
+                                {item.gatewayId || '—'}
+                              </p>
+                            </div>
+                          </div>
                         </td>
-                        <td className="py-3 px-4 text-muted-foreground text-xs">{item.version || '—'}</td>
-                        <td className="py-3 px-4">
-                          <Badge variant={item.status === 1 ? 'success' : 'secondary'}>
-                            {item.status === 1 ? '启用' : '禁用'}
+                        <td className="py-3.5 px-5">
+                          <Badge variant="outline" className="font-mono text-[10px]">
+                            {item.version || '—'}
                           </Badge>
                         </td>
-                        <td className="py-3 px-4">
-                          <Badge variant={item.auth === 1 ? 'default' : 'outline'}>
+                        <td className="py-3.5 px-5">
+                          <StatusBadge status={item.status} />
+                        </td>
+                        <td className="py-3.5 px-5">
+                          <Badge variant={item.auth === 1 ? 'info' : 'ghost'}>
                             {item.auth === 1 ? '强校验' : '不校验'}
                           </Badge>
                         </td>
-                        <td className="py-3 px-4 text-right">
-                          <Button variant="ghost" size="sm" onClick={() => openEdit(item)} className="cursor-pointer">
-                            编辑
-                          </Button>
+                        <td className="py-3.5 px-5 text-muted-foreground max-w-[260px] truncate" title={item.gatewayDesc}>
+                          {item.gatewayDesc || '—'}
+                        </td>
+                        <td className="py-3.5 px-5 text-right">
+                          <div className="inline-flex items-center gap-0.5">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => openEdit(item)}
+                              className="cursor-pointer text-muted-foreground hover:text-primary"
+                              aria-label={`编辑 ${item.gatewayId}`}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => setDeleteTarget(item)}
+                              className="cursor-pointer text-muted-foreground hover:text-destructive"
+                              aria-label={`删除 ${item.gatewayId}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between pt-4">
-                  <span className="text-sm text-muted-foreground">
-                    第 {page} / {totalPages} 页
-                  </span>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)} className="cursor-pointer">
-                      上一页
-                    </Button>
-                    <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)} className="cursor-pointer">
-                      下一页
-                    </Button>
-                  </div>
-                </div>
-              )}
+              <div className="px-5 pb-4">
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  total={total}
+                  pageSize={rows}
+                  onPageChange={setPage}
+                />
+              </div>
             </>
           )}
         </CardContent>
       </Card>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent onClose={() => setDialogOpen(false)}>
-          <DialogHeader>
-            <DialogTitle>{editItem ? '编辑网关配置' : '新增网关配置'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 mt-4">
-            <div className="space-y-2">
-              <Label htmlFor="gatewayId">网关ID *</Label>
+      {/* Edit / Create Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen} size="lg">
+        <DialogClose onClose={() => setDialogOpen(false)} />
+        <DialogHeader>
+          <div className="flex items-center gap-3 pr-8">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
+              {editItem ? <Pencil className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+            </div>
+            <div>
+              <DialogTitle>{editItem ? '编辑网关配置' : '新增网关配置'}</DialogTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {editItem ? `修改 ${editItem.gatewayId} 的配置信息` : '创建一个新的 MCP 网关实例'}
+              </p>
+            </div>
+          </div>
+        </DialogHeader>
+        <DialogBody>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="网关 ID" required htmlFor="gatewayId">
               <Input
                 id="gatewayId"
                 value={form.gatewayId}
                 onChange={(e) => setForm({ ...form, gatewayId: e.target.value })}
                 disabled={!!editItem}
                 placeholder="gateway_001"
+                className="font-mono"
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="gatewayName">网关名称 *</Label>
+            </FormField>
+            <FormField label="网关名称" required htmlFor="gatewayName">
               <Input
                 id="gatewayName"
                 value={form.gatewayName}
                 onChange={(e) => setForm({ ...form, gatewayName: e.target.value })}
                 placeholder="示例网关"
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="gatewayDesc">网关描述</Label>
+            </FormField>
+            <FormField label="协议版本" htmlFor="version" className="sm:col-span-2">
+              <Input
+                id="version"
+                value={form.version}
+                onChange={(e) => setForm({ ...form, version: e.target.value })}
+                placeholder="2024-11-05"
+                className="font-mono"
+              />
+            </FormField>
+            <FormField label="网关描述" htmlFor="gatewayDesc" className="sm:col-span-2">
               <Input
                 id="gatewayDesc"
                 value={form.gatewayDesc}
                 onChange={(e) => setForm({ ...form, gatewayDesc: e.target.value })}
                 placeholder="网关描述信息"
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="version">协议版本</Label>
-              <Input
-                id="version"
-                value={form.version}
-                onChange={(e) => setForm({ ...form, version: e.target.value })}
-                placeholder="2024-11-05"
+            </FormField>
+            <FormField label="运行状态" htmlFor="status">
+              <Select
+                id="status"
+                value={String(form.status)}
+                onChange={(v) => setForm({ ...form, status: Number(v) })}
+                options={[
+                  { value: '1', label: '🟢 启用' },
+                  { value: '0', label: '⚪ 禁用' },
+                ]}
               />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="status">认证状态</Label>
-                <Select
-                  id="status"
-                  value={String(form.status)}
-                  onChange={(e) => setForm({ ...form, status: Number(e.target.value) })}
-                  options={[
-                    { value: '1', label: '启用' },
-                    { value: '0', label: '禁用' },
-                  ]}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="auth">校验状态</Label>
-                <Select
-                  id="auth"
-                  value={String(form.auth)}
-                  onChange={(e) => setForm({ ...form, auth: Number(e.target.value) })}
-                  options={[
-                    { value: '1', label: '强校验' },
-                    { value: '0', label: '不校验' },
-                  ]}
-                />
-              </div>
-            </div>
+            </FormField>
+            <FormField label="鉴权校验" htmlFor="auth">
+              <Select
+                id="auth"
+                value={String(form.auth)}
+                onChange={(v) => setForm({ ...form, auth: Number(v) })}
+                options={[
+                  { value: '1', label: '🔒 强校验' },
+                  { value: '0', label: '🔓 不校验' },
+                ]}
+              />
+            </FormField>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} className="cursor-pointer">
-              取消
-            </Button>
-            <Button onClick={handleSave} disabled={saving} className="cursor-pointer">
-              {saving ? '保存中...' : '保存'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setDialogOpen(false)} className="cursor-pointer">
+            取消
+          </Button>
+          <Button onClick={handleSave} disabled={saving} className="cursor-pointer min-w-[100px]">
+            {saving ? (
+              <>
+                <RotateCcw className="h-4 w-4 animate-spin" />
+                保存中
+              </>
+            ) : (
+              '保存'
+            )}
+          </Button>
+        </DialogFooter>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="删除网关配置？"
+        description={`确认删除网关 "${deleteTarget?.gatewayId}" 吗？该操作不可恢复。`}
+        variant="destructive"
+        confirmText="确认删除"
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
     </div>
+  )
+}
+
+function StatusBadge({ status }: { status: number }) {
+  if (status === 1) {
+    return (
+      <Badge variant="success" className="gap-1.5">
+        <StatusDot status="online" showLabel={false} />
+        启用
+      </Badge>
+    )
+  }
+  return (
+    <Badge variant="ghost" className="gap-1.5">
+      <StatusDot status="offline" showLabel={false} />
+      禁用
+    </Badge>
   )
 }
