@@ -74,4 +74,9 @@ public class AdminManageService implements IAdminManageService {
         return adminService.queryGatewayAuthListByGatewayId(gatewayId);
     }
 
+    @Override
+    public GlobalSearchResultEntity globalSearch(GlobalSearchQueryEntity queryEntity) {
+        return adminService.globalSearch(queryEntity);
+    }
+
 }

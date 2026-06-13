@@ -23,7 +23,11 @@ function getClock() {
   })
 }
 
-export function TopBar() {
+interface TopBarProps {
+  onOpenSearch: () => void
+}
+
+export function TopBar({ onOpenSearch }: TopBarProps) {
   const location = useLocation()
   const { isDark, toggle } = useTheme()
   const [time, setTime] = useState(getClock())
@@ -64,8 +68,19 @@ export function TopBar() {
         ))}
       </nav>
 
-      {/* Search hint */}
-      <div className="ml-6 hidden md:flex items-center gap-2 px-3 h-9 rounded-lg border border-border/60 bg-card/50 text-xs text-muted-foreground min-w-[280px] cursor-text hover:border-primary/30 transition-colors">
+      {/* Global search trigger */}
+      <button
+        type="button"
+        onClick={onOpenSearch}
+        className={cn(
+          'ml-6 hidden md:flex items-center gap-2 px-3 h-9 rounded-lg',
+          'border border-border/60 bg-card/50 text-xs text-muted-foreground',
+          'min-w-[280px] text-left cursor-pointer',
+          'hover:border-primary/30 hover:text-foreground/80 transition-colors',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        )}
+        aria-label="全局搜索"
+      >
         <Search className="h-3.5 w-3.5" />
         <span>搜索网关、工具、协议...</span>
         <span className="ml-auto inline-flex items-center gap-0.5 text-[10px]">
@@ -76,7 +91,7 @@ export function TopBar() {
             K
           </kbd>
         </span>
-      </div>
+      </button>
 
       <div className="ml-auto flex items-center gap-2">
         <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground font-mono tabular-nums px-3 h-9 rounded-lg border border-border/60 bg-card/50">

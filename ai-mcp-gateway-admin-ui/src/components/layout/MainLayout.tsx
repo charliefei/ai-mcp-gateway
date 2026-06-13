@@ -1,12 +1,27 @@
 import { Outlet } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
+import { GlobalSearch } from './GlobalSearch'
 import { Toaster } from 'sonner'
 import { cn } from '@/lib/utils'
 
 export function MainLayout() {
   const [collapsed, setCollapsed] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+
+  // Global ⌘K / Ctrl+K shortcut to open the search palette
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const isCmdK = (e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')
+      if (isCmdK) {
+        e.preventDefault()
+        setSearchOpen((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   return (
     <div className="min-h-screen bg-background">
@@ -18,11 +33,12 @@ export function MainLayout() {
           collapsed ? 'ml-[68px]' : 'ml-60'
         )}
       >
-        <TopBar />
+        <TopBar onOpenSearch={() => setSearchOpen(true)} />
         <main className="flex-1 px-6 py-6 max-w-[1600px] w-full mx-auto">
           <Outlet />
         </main>
       </div>
+      <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
       <Toaster
         position="top-right"
         richColors

@@ -102,5 +102,21 @@
         ORDER BY update_time DESC
     </select>
 
+    <!-- 全局搜索：在 gateway_id / api_key 中模糊匹配 -->
+    <select id="searchAuthList" resultMap="McpGatewayAuthMap">
+        SELECT id, gateway_id, api_key, rate_limit, expire_time, status, create_time, update_time
+        FROM mcp_gateway_auth
+        <where>
+            <if test="keyword != null and keyword != ''">
+                (
+                    gateway_id LIKE concat('%', #{keyword}, '%')
+                    OR api_key LIKE concat('%', #{keyword}, '%')
+                )
+            </if>
+        </where>
+        ORDER BY update_time DESC
+        LIMIT #{limit}
+    </select>
+
 </mapper>
 

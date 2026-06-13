@@ -35,4 +35,11 @@ public interface IMcpGatewayAuthDao {
 
     int queryEffectiveGatewayAuthCount(String gatewayId);
 
+    /**
+     * 全局搜索认证：按关键字在 gateway_id / api_key 中模糊匹配，
+     * 返回最多 {@code limit} 条结果。Repository 层建议传 {@code limit+1} 以便判断是否还有更多命中。
+     */
+    List<McpGatewayAuthPO> searchAuthList(@org.apache.ibatis.annotations.Param("keyword") String keyword,
+                                          @org.apache.ibatis.annotations.Param("limit") int limit);
+
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -30,6 +31,8 @@ import { cn } from '@/lib/utils'
 import type { GatewayConfigDTO, GatewayConfigSaveRequest } from '@/types'
 
 export function GatewayList() {
+  // 全局搜索跳转过来时，URL 上会带 ?q=keyword；用它预填"网关名称"并自动触发一次查询
+  const [searchParams] = useSearchParams()
   const [data, setData] = useState<GatewayConfigDTO[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -37,7 +40,7 @@ export function GatewayList() {
   const [page, setPage] = useState(1)
   const [rows, setRows] = useState(10)
   const [searchGatewayId, setSearchGatewayId] = useState('')
-  const [searchGatewayName, setSearchGatewayName] = useState('')
+  const [searchGatewayName, setSearchGatewayName] = useState(() => searchParams.get('q') ?? '')
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editItem, setEditItem] = useState<GatewayConfigDTO | null>(null)
@@ -80,6 +83,16 @@ export function GatewayList() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  // 如果 URL 上后续又带 ?q= 跳过来（例如从全局搜索再次点击），同步本地状态并重新查询
+  useEffect(() => {
+    const q = searchParams.get('q')
+    if (q && q !== searchGatewayName) {
+      setSearchGatewayName(q)
+      setPage(1)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   const handleSearch = () => {
     setPage(1)

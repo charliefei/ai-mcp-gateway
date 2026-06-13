@@ -31,4 +31,9 @@ public interface IAdminRepository {
      */
     List<GatewayAuthConfigEntity> queryGatewayAuthListByGatewayId(String gatewayId);
 
+    /**
+     * 全局搜索：跨网关/工具/协议/认证四个维度检索关键字
+     */
+    GlobalSearchResultEntity globalSearch(GlobalSearchQueryEntity queryEntity);
+
 }

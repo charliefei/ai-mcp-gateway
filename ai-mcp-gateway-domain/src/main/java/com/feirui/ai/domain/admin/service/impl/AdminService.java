@@ -80,4 +80,9 @@ public class AdminService implements IAdminService {
         return adminRepository.queryGatewayAuthListByGatewayId(gatewayId);
     }
 
+    @Override
+    public GlobalSearchResultEntity globalSearch(GlobalSearchQueryEntity queryEntity) {
+        return adminRepository.globalSearch(queryEntity);
+    }
+
 }

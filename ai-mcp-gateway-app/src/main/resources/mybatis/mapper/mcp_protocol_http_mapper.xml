@@ -112,5 +112,19 @@
         </where>
     </select>
 
+    <!-- 全局搜索：在 http_url 中模糊匹配 -->
+    <select id="searchProtocolList" resultMap="McpProtocolRegistryMap">
+        SELECT id, protocol_id, http_url, http_method, http_headers, timeout,
+               create_time, update_time
+        FROM mcp_protocol_http
+        <where>
+            <if test="keyword != null and keyword != ''">
+                http_url LIKE concat('%', #{keyword}, '%')
+            </if>
+        </where>
+        ORDER BY update_time DESC
+        LIMIT #{limit}
+    </select>
+
 </mapper>
 

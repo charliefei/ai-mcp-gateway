@@ -47,4 +47,9 @@ public interface IAdminService {
 
     Response<GatewayLLMResponseDTO> testCallGateway(GatewayLLMRequestDTO requestDTO);
 
+    /**
+     * 全局搜索：跨网关/工具/协议/认证四个维度检索关键字，按分类聚合返回
+     */
+    Response<GlobalSearchResultDTO> globalSearch(GlobalSearchQueryDTO queryDTO);
+
 }

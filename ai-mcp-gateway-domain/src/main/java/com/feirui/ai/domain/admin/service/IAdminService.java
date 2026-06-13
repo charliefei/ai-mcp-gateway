@@ -31,4 +31,12 @@ public interface IAdminService {
      */
     List<GatewayAuthConfigEntity> queryGatewayAuthListByGatewayId(String gatewayId);
 
+    /**
+     * 全局搜索：跨网关/工具/协议/认证四个维度检索关键字
+     *
+     * @param queryEntity 关键字 + 每分类返回上限
+     * @return 按分类聚合的搜索结果
+     */
+    GlobalSearchResultEntity globalSearch(GlobalSearchQueryEntity queryEntity);
+
 }

@@ -18,6 +18,7 @@ import type {
   GatewayLLMRequestDTO,
   GatewayLLMResponseDTO,
   GatewayConfigResponseDTO,
+  GlobalSearchResult,
 } from '@/types'
 
 const BASE_URL = '/api-gateway/admin/'
@@ -168,6 +169,23 @@ export const authApi = {
 export const testApi = {
   testCallGateway(data: GatewayLLMRequestDTO) {
     return apiClient.post<ApiResponse<GatewayLLMResponseDTO>>('test_call_gateway', data)
+  },
+}
+
+// ==============================
+// 全局搜索 API
+// ==============================
+
+export const searchApi = {
+  /**
+   * 跨网关/工具/协议/认证四个维度的关键字检索。
+   * @param keyword 搜索关键字
+   * @param limit 每个分类返回的最大条数（默认 5）
+   */
+  globalSearch(keyword: string, limit = 5) {
+    return apiClient
+      .get<ApiResponse<GlobalSearchResult>>('global_search', { params: { keyword, limit } })
+      .then((r) => r.data.data)
   },
 }
 

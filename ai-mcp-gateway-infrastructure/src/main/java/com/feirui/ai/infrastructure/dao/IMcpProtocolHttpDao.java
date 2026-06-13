@@ -28,5 +28,12 @@ public interface IMcpProtocolHttpDao {
 
     Long queryProtocolListCount(McpProtocolHttpPO query);
 
+    /**
+     * 全局搜索协议：按关键字在 http_url 中模糊匹配，
+     * 返回最多 {@code limit} 条结果。Repository 层建议传 {@code limit+1} 以便判断是否还有更多命中。
+     */
+    List<McpProtocolHttpPO> searchProtocolList(@org.apache.ibatis.annotations.Param("keyword") String keyword,
+                                               @org.apache.ibatis.annotations.Param("limit") int limit);
+
 }
 

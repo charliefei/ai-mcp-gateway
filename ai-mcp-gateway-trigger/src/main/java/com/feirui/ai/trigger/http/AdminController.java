@@ -720,4 +720,77 @@ public class AdminController implements IAdminService {
         }
     }
 
+    /**
+     * 全局搜索：跨网关/工具/协议/认证四个维度检索关键字
+     * <p>
+     * GET /admin/global_search?keyword=xxx&limit=5
+     */
+    @GetMapping("global_search")
+    @Override
+    public Response<GlobalSearchResultDTO> globalSearch(GlobalSearchQueryDTO queryDTO) {
+        try {
+            String keyword = queryDTO == null ? null : queryDTO.getKeyword();
+            Integer limit = queryDTO == null ? null : queryDTO.getLimit();
+            log.info("全局搜索开始 keyword: {} limit: {}", keyword, limit);
+
+            GlobalSearchQueryEntity queryEntity = GlobalSearchQueryEntity.builder()
+                    .keyword(keyword)
+                    .limit(limit == null || limit <= 0 ? 5 : limit)
+                    .build();
+
+            GlobalSearchResultEntity entity = adminManageService.globalSearch(queryEntity);
+            GlobalSearchResultDTO dto = toGlobalSearchResultDTO(entity);
+
+            log.info("全局搜索完成 keyword: {} total: {} categories: {}",
+                    keyword, dto == null ? 0 : dto.getTotal(),
+                    dto == null ? 0 : (dto.getCategories() == null ? 0 : dto.getCategories().size()));
+            return Response.<GlobalSearchResultDTO>builder()
+                    .code(ResponseCode.SUCCESS.getCode())
+                    .info(ResponseCode.SUCCESS.getInfo())
+                    .data(dto)
+                    .build();
+        } catch (Exception e) {
+            log.error("全局搜索失败 keyword: {}", queryDTO == null ? null : queryDTO.getKeyword(), e);
+            return Response.<GlobalSearchResultDTO>builder()
+                    .code(ResponseCode.UN_ERROR.getCode())
+                    .info(ResponseCode.UN_ERROR.getInfo())
+                    .build();
+        }
+    }
+
+    private GlobalSearchResultDTO toGlobalSearchResultDTO(GlobalSearchResultEntity entity) {
+        if (entity == null) {
+            return GlobalSearchResultDTO.builder()
+                    .keyword("")
+                    .total(0)
+                    .categories(java.util.Collections.emptyList())
+                    .build();
+        }
+        List<GlobalSearchResultDTO.Category> categories = entity.getCategories() == null
+                ? java.util.Collections.emptyList()
+                : entity.getCategories().stream().map(c -> GlobalSearchResultDTO.Category.builder()
+                        .type(c.getType())
+                        .label(c.getLabel())
+                        .count(c.getCount())
+                        .truncated(c.getTruncated())
+                        .items(c.getItems() == null ? java.util.Collections.emptyList()
+                                : c.getItems().stream().map(it -> GlobalSearchResultDTO.Item.builder()
+                                        .id(it.getId())
+                                        .type(it.getType())
+                                        .title(it.getTitle())
+                                        .subtitle(it.getSubtitle())
+                                        .description(it.getDescription())
+                                        .badge(it.getBadge())
+                                        .status(it.getStatus())
+                                        .path(it.getPath())
+                                        .queryParamKey(it.getQueryParamKey())
+                                        .build()).collect(Collectors.toList()))
+                        .build()).collect(Collectors.toList());
+        return GlobalSearchResultDTO.builder()
+                .keyword(entity.getKeyword())
+                .total(entity.getTotal())
+                .categories(categories)
+                .build();
+    }
+
 }

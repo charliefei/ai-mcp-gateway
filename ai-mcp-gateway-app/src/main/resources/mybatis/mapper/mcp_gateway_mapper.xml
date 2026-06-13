@@ -105,5 +105,22 @@
         WHERE gateway_id = #{gatewayId}
     </update>
 
+    <!-- 全局搜索：在 gateway_id / gateway_name / gateway_desc 中模糊匹配 -->
+    <select id="searchGatewayList" resultMap="McpGatewayMap">
+        SELECT id, gateway_id, gateway_name, gateway_desc, version, auth, status, create_time, update_time
+        FROM mcp_gateway
+        <where>
+            <if test="keyword != null and keyword != ''">
+                (
+                    gateway_id LIKE concat('%', #{keyword}, '%')
+                    OR gateway_name LIKE concat('%', #{keyword}, '%')
+                    OR gateway_desc LIKE concat('%', #{keyword}, '%')
+                )
+            </if>
+        </where>
+        ORDER BY update_time DESC
+        LIMIT #{limit}
+    </select>
+
 </mapper>
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -31,6 +32,8 @@ import { cn } from '@/lib/utils'
 import type { GatewayProtocolDTO, HTTPProtocolSave, ProtocolMappingSave } from '@/types'
 
 export function ProtocolList() {
+  // 全局搜索跳转过来时，URL 上会带 ?q=keyword；用它预填"请求地址"并自动触发一次查询
+  const [searchParams] = useSearchParams()
   const [data, setData] = useState<GatewayProtocolDTO[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -38,7 +41,7 @@ export function ProtocolList() {
   const [page, setPage] = useState(1)
   const [rows, setRows] = useState(10)
   const [searchProtocolId, setSearchProtocolId] = useState('')
-  const [searchHttpUrl, setSearchHttpUrl] = useState('')
+  const [searchHttpUrl, setSearchHttpUrl] = useState(() => searchParams.get('q') ?? '')
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -100,6 +103,16 @@ export function ProtocolList() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  // 如果 URL 上后续又带 ?q= 跳过来（例如从全局搜索再次点击），同步本地状态并重新查询
+  useEffect(() => {
+    const q = searchParams.get('q')
+    if (q && q !== searchHttpUrl) {
+      setSearchHttpUrl(q)
+      setPage(1)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   const handleSearch = () => {
     setPage(1)

@@ -116,5 +116,23 @@
         DELETE FROM mcp_gateway_tool WHERE tool_id = #{toolId}
     </delete>
 
+    <!-- 全局搜索：在 gateway_id / tool_name / tool_description 中模糊匹配 -->
+    <select id="searchToolList" resultMap="McpGatewayToolMap">
+        SELECT id, gateway_id, tool_id, tool_name, tool_type, tool_description, tool_version, protocol_id, protocol_type,
+               create_time, update_time
+        FROM mcp_gateway_tool
+        <where>
+            <if test="keyword != null and keyword != ''">
+                (
+                    gateway_id LIKE concat('%', #{keyword}, '%')
+                    OR tool_name LIKE concat('%', #{keyword}, '%')
+                    OR tool_description LIKE concat('%', #{keyword}, '%')
+                )
+            </if>
+        </where>
+        ORDER BY update_time DESC
+        LIMIT #{limit}
+    </select>
+
 </mapper>
 

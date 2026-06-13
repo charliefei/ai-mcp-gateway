@@ -26,4 +26,11 @@ public interface IMcpGatewayToolDao {
 
     int deleteByToolId(Long toolId);
 
+    /**
+     * 全局搜索工具：按关键字在 gateway_id / tool_name / tool_description 中模糊匹配，
+     * 返回最多 {@code limit} 条结果。Repository 层建议传 {@code limit+1} 以便判断是否还有更多命中。
+     */
+    List<McpGatewayToolPO> searchToolList(@org.apache.ibatis.annotations.Param("keyword") String keyword,
+                                          @org.apache.ibatis.annotations.Param("limit") int limit);
+
 }

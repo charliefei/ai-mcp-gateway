@@ -272,12 +272,12 @@ public class AdminRepository implements IAdminRepository {
         }
         List<McpProtocolHttpPO> pos = protocolHttpDao.queryListByProtocolIds(protocolIds);
         List<McpProtocolMappingPO> mappings = protocolMappingDao.queryListByProtocolIds(protocolIds);
-        
+
         return pos.stream().map(po -> {
             List<McpProtocolMappingPO> protocolMappings = mappings.stream()
                     .filter(m -> m.getProtocolId().equals(po.getProtocolId()))
                     .collect(Collectors.toList());
-                    
+
             return GatewayProtocolConfigEntity.builder()
                     .protocolId(po.getProtocolId())
                     .httpUrl(po.getHttpUrl())
@@ -296,6 +296,158 @@ public class AdminRepository implements IAdminRepository {
                             .build()).collect(Collectors.toList()))
                     .build();
         }).collect(Collectors.toList());
+    }
+
+    @Override
+    public GlobalSearchResultEntity globalSearch(GlobalSearchQueryEntity queryEntity) {
+        // 兜底：关键字为空直接返回空结果，避免查全表
+        String keyword = queryEntity == null ? null : queryEntity.getKeyword();
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return GlobalSearchResultEntity.builder()
+                    .keyword(keyword == null ? "" : keyword)
+                    .total(0)
+                    .categories(java.util.Collections.emptyList())
+                    .build();
+        }
+        // 上限 50（防止前端恶意传大值），下限 1
+        int userLimit = queryEntity.getLimit() == null || queryEntity.getLimit() <= 0 ? 5 : queryEntity.getLimit();
+        int limit = Math.min(userLimit, 50);
+        // 用 limit+1 探测是否还有更多命中
+        int probeLimit = limit + 1;
+
+        List<GlobalSearchResultEntity.Category> categories = new java.util.ArrayList<>(4);
+        int total = 0;
+
+        // ---- 1. 网关 ----
+        List<McpGatewayPO> gatewayPos = mcpGatewayDao.searchGatewayList(keyword, probeLimit);
+        if (!gatewayPos.isEmpty()) {
+            boolean hasMore = gatewayPos.size() > limit;
+            List<McpGatewayPO> shown = hasMore ? gatewayPos.subList(0, limit) : gatewayPos;
+            int categoryCount = hasMore ? limit + 1 : shown.size();
+            List<GlobalSearchResultEntity.Item> items = shown.stream()
+                    .map(po -> GlobalSearchResultEntity.Item.builder()
+                            .id(po.getGatewayId())
+                            .type("gateway")
+                            .title(emptyToFallback(po.getGatewayName(), po.getGatewayId()))
+                            .subtitle(po.getGatewayId())
+                            .description(po.getGatewayDesc())
+                            .status(po.getStatus())
+                            .path("/gateway")
+                            .queryParamKey("gatewayName")
+                            .build())
+                    .collect(Collectors.toList());
+            categories.add(GlobalSearchResultEntity.Category.builder()
+                    .type("gateway")
+                    .label("网关")
+                    .count(categoryCount)
+                    .truncated(hasMore ? 1 : 0)
+                    .items(items)
+                    .build());
+            total += categoryCount;
+        }
+
+        // ---- 2. 工具 ----
+        List<McpGatewayToolPO> toolPos = mcpGatewayToolDao.searchToolList(keyword, probeLimit);
+        if (!toolPos.isEmpty()) {
+            boolean hasMore = toolPos.size() > limit;
+            List<McpGatewayToolPO> shown = hasMore ? toolPos.subList(0, limit) : toolPos;
+            int categoryCount = hasMore ? limit + 1 : shown.size();
+            List<GlobalSearchResultEntity.Item> items = shown.stream()
+                    .map(po -> GlobalSearchResultEntity.Item.builder()
+                            .id(po.getToolId() == null ? "" : po.getToolId().toString())
+                            .type("tool")
+                            .title(emptyToFallback(po.getToolName(), po.getToolId() == null ? "" : po.getToolId().toString()))
+                            .subtitle(po.getGatewayId() + " / " + po.getToolId())
+                            .description(po.getToolDescription())
+                            .path("/tool")
+                            .queryParamKey("toolName")
+                            .build())
+                    .collect(Collectors.toList());
+            categories.add(GlobalSearchResultEntity.Category.builder()
+                    .type("tool")
+                    .label("工具")
+                    .count(categoryCount)
+                    .truncated(hasMore ? 1 : 0)
+                    .items(items)
+                    .build());
+            total += categoryCount;
+        }
+
+        // ---- 3. 协议 ----
+        List<McpProtocolHttpPO> protocolPos = protocolHttpDao.searchProtocolList(keyword, probeLimit);
+        if (!protocolPos.isEmpty()) {
+            boolean hasMore = protocolPos.size() > limit;
+            List<McpProtocolHttpPO> shown = hasMore ? protocolPos.subList(0, limit) : protocolPos;
+            int categoryCount = hasMore ? limit + 1 : shown.size();
+            List<GlobalSearchResultEntity.Item> items = shown.stream()
+                    .map(po -> GlobalSearchResultEntity.Item.builder()
+                            .id(po.getProtocolId() == null ? "" : po.getProtocolId().toString())
+                            .type("protocol")
+                            .title((po.getHttpMethod() == null ? "" : po.getHttpMethod()) + " " + (po.getHttpUrl() == null ? "" : po.getHttpUrl()))
+                            .subtitle(po.getProtocolId() == null ? "" : po.getProtocolId().toString())
+                            .badge(po.getHttpMethod())
+                            .path("/protocol")
+                            .queryParamKey("httpUrl")
+                            .build())
+                    .collect(Collectors.toList());
+            categories.add(GlobalSearchResultEntity.Category.builder()
+                    .type("protocol")
+                    .label("协议")
+                    .count(categoryCount)
+                    .truncated(hasMore ? 1 : 0)
+                    .items(items)
+                    .build());
+            total += categoryCount;
+        }
+
+        // ---- 4. 认证 ----
+        List<McpGatewayAuthPO> authPos = mcpGatewayAuthDao.searchAuthList(keyword, probeLimit);
+        if (!authPos.isEmpty()) {
+            boolean hasMore = authPos.size() > limit;
+            List<McpGatewayAuthPO> shown = hasMore ? authPos.subList(0, limit) : authPos;
+            int categoryCount = hasMore ? limit + 1 : shown.size();
+            List<GlobalSearchResultEntity.Item> items = shown.stream()
+                    .map(po -> GlobalSearchResultEntity.Item.builder()
+                            .id(po.getGatewayId())
+                            .type("auth")
+                            .title(maskApiKey(po.getApiKey()))
+                            .subtitle(po.getGatewayId())
+                            .path("/auth")
+                            .queryParamKey("gatewayId")
+                            .build())
+                    .collect(Collectors.toList());
+            categories.add(GlobalSearchResultEntity.Category.builder()
+                    .type("auth")
+                    .label("认证")
+                    .count(categoryCount)
+                    .truncated(hasMore ? 1 : 0)
+                    .items(items)
+                    .build());
+            total += categoryCount;
+        }
+
+        return GlobalSearchResultEntity.builder()
+                .keyword(keyword)
+                .total(total)
+                .categories(categories)
+                .build();
+    }
+
+    private static String emptyToFallback(String primary, String fallback) {
+        return (primary == null || primary.isEmpty()) ? (fallback == null ? "" : fallback) : primary;
+    }
+
+    /**
+     * 简单掩码：前 4 后 4，中间 ***；长度过短时返回 *** 整串。
+     */
+    private static String maskApiKey(String apiKey) {
+        if (apiKey == null || apiKey.isEmpty()) {
+            return "";
+        }
+        if (apiKey.length() <= 8) {
+            return "***";
+        }
+        return apiKey.substring(0, 4) + "***" + apiKey.substring(apiKey.length() - 4);
     }
 
 }

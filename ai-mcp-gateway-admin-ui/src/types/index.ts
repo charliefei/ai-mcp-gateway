@@ -185,3 +185,36 @@ export interface GatewayLLMResponseDTO {
 export interface GatewayConfigResponseDTO {
   success: boolean
 }
+
+// ==============================
+// 全局搜索
+// ==============================
+
+export type GlobalSearchItemType = 'gateway' | 'tool' | 'protocol' | 'auth'
+
+export interface GlobalSearchItem {
+  id: string
+  type: GlobalSearchItemType
+  title: string
+  subtitle?: string
+  description?: string
+  badge?: string
+  status?: number
+  path: string
+  queryParamKey?: string
+}
+
+export interface GlobalSearchCategory {
+  type: GlobalSearchItemType
+  label: string
+  count: number
+  /** 超出 limit 的剩余条数；>0 时前端可展示"查看全部" */
+  truncated: number
+  items: GlobalSearchItem[]
+}
+
+export interface GlobalSearchResult {
+  keyword: string
+  total: number
+  categories: GlobalSearchCategory[]
+}
