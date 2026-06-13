@@ -2,17 +2,19 @@ package com.feirui.ai.infrastructure.adapter.repository;
 
 import com.feirui.ai.domain.auth.model.entity.LicenseCommandEntity;
 import com.feirui.ai.domain.auth.model.valobj.McpGatewayAuthVO;
-import com.feirui.ai.domain.auth.model.valobj.enums.AuthStatusEnum;
 import com.feirui.ai.domain.auth.repository.IAuthRepository;
 import com.feirui.ai.infrastructure.dao.IMcpGatewayAuthDao;
 import com.feirui.ai.infrastructure.dao.IMcpGatewayDao;
 import com.feirui.ai.infrastructure.dao.po.McpGatewayAuthPO;
 import com.feirui.ai.infrastructure.dao.po.McpGatewayPO;
+import com.feirui.ai.types.enums.GatewayEnum;
 import com.feirui.ai.types.enums.McpErrorCodes;
 import com.feirui.ai.types.exception.AppException;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
+
+import java.util.Objects;
 
 /**
  * 鉴权仓储服务
@@ -34,7 +36,7 @@ public class AuthRepository implements IAuthRepository {
         poReq.setApiKey(apiKey);
         McpGatewayAuthPO mcpGatewayAuthPO = mcpGatewayAuthDao.queryMcpGatewayAuthPO(poReq);
         if (null == mcpGatewayAuthPO) return false;
-        return mcpGatewayAuthPO.getStatus() == AuthStatusEnum.AuthConfig.ENABLE.getCode();
+        return Objects.equals(mcpGatewayAuthPO.getStatus(), GatewayEnum.GatewayStatus.ENABLE.getCode());
     }
 
     @Override
@@ -57,7 +59,7 @@ public class AuthRepository implements IAuthRepository {
                 .apiKey(mcpGatewayAuthPO.getApiKey())
                 .rateLimit(mcpGatewayAuthPO.getRateLimit())
                 .expireTime(mcpGatewayAuthPO.getExpireTime())
-                .status(AuthStatusEnum.AuthConfig.get(mcpGatewayAuthPO.getStatus()))
+                .status(GatewayEnum.GatewayStatus.get(mcpGatewayAuthPO.getStatus()))
                 .build();
     }
 
@@ -81,12 +83,12 @@ public class AuthRepository implements IAuthRepository {
     }
 
     @Override
-    public AuthStatusEnum.GatewayConfig queryGatewayAuthStatus(String gatewayId) {
+    public GatewayEnum.GatewayAuthStatusEnum queryGatewayAuthStatus(String gatewayId) {
         McpGatewayPO mcpGatewayPO = mcpGatewayDao.queryMcpGatewayByGatewayId(gatewayId);
         if (null == mcpGatewayPO) {
             throw new AppException(McpErrorCodes.INVALID_PARAMS, "无效参数 gatewayId 不存在");
         }
-        return AuthStatusEnum.GatewayConfig.get(mcpGatewayPO.getAuth());
+        return GatewayEnum.GatewayAuthStatusEnum.get(mcpGatewayPO.getAuth());
     }
 
     @Override

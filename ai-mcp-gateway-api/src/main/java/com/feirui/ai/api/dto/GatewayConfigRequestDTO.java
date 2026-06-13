@@ -26,9 +26,9 @@ public class GatewayConfigRequestDTO {
         private String gatewayDesc;
         /** 协议版本 */
         private String version;
-        /** 校验状态：0-禁用，1-启用 */
+        /** 鉴权模式：0-不校验，1-强校验 */
         private Integer auth;
-        /** 网关状态：0-不校验，1-强校验 */
+        /** 网关状态：0-禁用，1-启用 */
         private Integer status;
     }
 

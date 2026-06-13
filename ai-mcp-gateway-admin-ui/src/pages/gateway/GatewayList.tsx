@@ -224,13 +224,13 @@ export function GatewayList() {
                         </td>
                         <td className="py-3 px-4 text-muted-foreground text-xs">{item.version || '—'}</td>
                         <td className="py-3 px-4">
-                          <Badge variant={item.auth === 1 ? 'success' : 'secondary'}>
-                            {item.auth === 1 ? '启用' : '禁用'}
+                          <Badge variant={item.status === 1 ? 'success' : 'secondary'}>
+                            {item.status === 1 ? '启用' : '禁用'}
                           </Badge>
                         </td>
                         <td className="py-3 px-4">
-                          <Badge variant={item.status === 1 ? 'default' : 'outline'}>
-                            {item.status === 1 ? '强校验' : '不校验'}
+                          <Badge variant={item.auth === 1 ? 'default' : 'outline'}>
+                            {item.auth === 1 ? '强校验' : '不校验'}
                           </Badge>
                         </td>
                         <td className="py-3 px-4 text-right">
@@ -309,11 +309,11 @@ export function GatewayList() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="auth">认证状态</Label>
+                <Label htmlFor="status">认证状态</Label>
                 <Select
-                  id="auth"
-                  value={String(form.auth)}
-                  onChange={(e) => setForm({ ...form, auth: Number(e.target.value) })}
+                  id="status"
+                  value={String(form.status)}
+                  onChange={(e) => setForm({ ...form, status: Number(e.target.value) })}
                   options={[
                     { value: '1', label: '启用' },
                     { value: '0', label: '禁用' },
@@ -321,11 +321,11 @@ export function GatewayList() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="status">校验状态</Label>
+                <Label htmlFor="auth">校验状态</Label>
                 <Select
-                  id="status"
-                  value={String(form.status)}
-                  onChange={(e) => setForm({ ...form, status: Number(e.target.value) })}
+                  id="auth"
+                  value={String(form.auth)}
+                  onChange={(e) => setForm({ ...form, auth: Number(e.target.value) })}
                   options={[
                     { value: '1', label: '强校验' },
                     { value: '0', label: '不校验' },

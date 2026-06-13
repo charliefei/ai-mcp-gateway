@@ -2,9 +2,9 @@ package com.feirui.ai.domain.auth.service.license;
 
 import com.feirui.ai.domain.auth.model.entity.LicenseCommandEntity;
 import com.feirui.ai.domain.auth.model.valobj.McpGatewayAuthVO;
-import com.feirui.ai.domain.auth.model.valobj.enums.AuthStatusEnum;
 import com.feirui.ai.domain.auth.repository.IAuthRepository;
 import com.feirui.ai.domain.auth.service.IAuthLicenseService;
+import com.feirui.ai.types.enums.GatewayEnum;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,8 +27,8 @@ public class AuthLicenseService implements IAuthLicenseService {
     @Override
     public boolean checkLicense(LicenseCommandEntity commandEntity) {
         // 查询是否强校验(非强校验，直接返回校验结果 true)
-        AuthStatusEnum.GatewayConfig gatewayAuthStatus = repository.queryGatewayAuthStatus(commandEntity.getGatewayId());
-        if (AuthStatusEnum.GatewayConfig.NOT_VERIFIED.equals(gatewayAuthStatus)) return true;
+        GatewayEnum.GatewayAuthStatusEnum gatewayAuthStatus = repository.queryGatewayAuthStatus(commandEntity.getGatewayId());
+        if (GatewayEnum.GatewayAuthStatusEnum.NOT_VERIFIED.equals(gatewayAuthStatus)) return true;
 
         // 查询网关认证配置信息
         McpGatewayAuthVO mcpGatewayAuthVO = repository.queryEffectiveGatewayAuthInfo(commandEntity);
@@ -37,7 +37,7 @@ public class AuthLicenseService implements IAuthLicenseService {
         if (null == mcpGatewayAuthVO) return false;
 
         // 检查是否开启了认证模式，未开启则为false
-        if (AuthStatusEnum.AuthConfig.DISABLE.equals(mcpGatewayAuthVO.getStatus())) {
+        if (GatewayEnum.GatewayStatus.DISABLE.equals(mcpGatewayAuthVO.getStatus())) {
             return false;
         }
 

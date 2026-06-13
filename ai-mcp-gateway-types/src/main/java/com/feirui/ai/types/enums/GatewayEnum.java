@@ -11,38 +11,11 @@ public enum GatewayEnum {
     ;
 
     @Getter
-    public enum GatewayStatus {
+    public enum GatewayAuthStatusEnum {
 
         NOT_VERIFIED(0, "不校验"),
 
         STRONG_VERIFIED(1, "强校验"),
-        ;
-
-        private final Integer code;
-        private final String info;
-
-        GatewayStatus(Integer code, String info) {
-            this.code = code;
-            this.info = info;
-        }
-
-        public static GatewayStatus get(Integer code) {
-            if (code == null) return null;
-            for (GatewayStatus val : values()) {
-                if (val.code.equals(code)) {
-                    return val;
-                }
-            }
-            throw new AppException(ResponseCode.ENUM_NOT_FOUND.getCode(), ResponseCode.ENUM_NOT_FOUND.getInfo());
-        }
-    }
-
-    @Getter
-    public enum GatewayAuthStatusEnum {
-
-        ENABLE(1,"启用"),
-        DISABLE(0,"禁用")
-
         ;
 
         private final Integer code;
@@ -53,11 +26,38 @@ public enum GatewayEnum {
             this.info = info;
         }
 
-        public static GatewayAuthStatusEnum getByCode(Integer code){
+        public static GatewayAuthStatusEnum get(Integer code) {
+            if (code == null) return null;
+            for (GatewayAuthStatusEnum val : values()) {
+                if (val.code.equals(code)) {
+                    return val;
+                }
+            }
+            throw new AppException(ResponseCode.ENUM_NOT_FOUND.getCode(), ResponseCode.ENUM_NOT_FOUND.getInfo());
+        }
+    }
+
+    @Getter
+    public enum GatewayStatus {
+
+        ENABLE(1,"启用"),
+        DISABLE(0,"禁用")
+
+        ;
+
+        private final Integer code;
+        private final String info;
+
+        GatewayStatus(Integer code, String info) {
+            this.code = code;
+            this.info = info;
+        }
+
+        public static GatewayStatus get(Integer code){
             if(null == code){
                 return null;
             }
-            for (GatewayAuthStatusEnum anEnum : GatewayAuthStatusEnum.values()) {
+            for (GatewayStatus anEnum : GatewayStatus.values()) {
                 if(anEnum.code.equals(code)){
                     return anEnum;
                 }

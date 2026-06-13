@@ -32,11 +32,11 @@ public class GatewayConfigVO {
      */
     private String version;
     /**
-     * 校验状态：0-禁用，1-启用
+     * 校验状态：0-不校验，1-强校验
      */
     private GatewayEnum.GatewayAuthStatusEnum auth;
     /**
-     * 网关状态：0-不校验，1-强校验
+     * 网关状态：0-禁用，1-启用
      */
     private GatewayEnum.GatewayStatus status;
 

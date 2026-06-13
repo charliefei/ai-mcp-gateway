@@ -55,7 +55,7 @@ public class AdminController implements IAdminService {
                             .gatewayName(requestDTO.getGatewayName())
                             .gatewayDesc(requestDTO.getGatewayDesc())
                             .version(requestDTO.getVersion())
-                            .auth(GatewayEnum.GatewayAuthStatusEnum.getByCode(requestDTO.getAuth()))
+                            .auth(GatewayEnum.GatewayAuthStatusEnum.get(requestDTO.getAuth()))
                             .status(GatewayEnum.GatewayStatus.get(requestDTO.getStatus()))
                             .build())
                     .build();

@@ -2,9 +2,9 @@ package com.feirui.ai.domain.auth.service.register;
 
 import com.feirui.ai.domain.auth.model.entity.RegisterCommandEntity;
 import com.feirui.ai.domain.auth.model.valobj.McpGatewayAuthVO;
-import com.feirui.ai.domain.auth.model.valobj.enums.AuthStatusEnum;
 import com.feirui.ai.domain.auth.repository.IAuthRepository;
 import com.feirui.ai.domain.auth.service.IAuthRegisterService;
+import com.feirui.ai.types.enums.GatewayEnum;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.RandomStringUtils;
@@ -31,7 +31,7 @@ public class AuthRegisterService implements IAuthRegisterService {
                 .apiKey(apiKey)
                 .rateLimit(commandEntity.getRateLimit())
                 .expireTime(commandEntity.getExpireTime())
-                .status(AuthStatusEnum.AuthConfig.ENABLE)
+                .status(GatewayEnum.GatewayStatus.ENABLE)
                 .build();
 
         // 3. 保存数据

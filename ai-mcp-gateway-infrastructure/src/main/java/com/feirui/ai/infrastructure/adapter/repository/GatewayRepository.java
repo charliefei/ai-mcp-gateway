@@ -42,8 +42,8 @@ public class GatewayRepository implements IGatewayRepository {
         mcpGatewayPO.setGatewayName(gatewayConfigVO.getGatewayName());
         mcpGatewayPO.setGatewayDesc(gatewayConfigVO.getGatewayDesc());
         mcpGatewayPO.setVersion(gatewayConfigVO.getVersion());
-        mcpGatewayPO.setAuth(null != gatewayConfigVO.getAuth() ? gatewayConfigVO.getAuth().getCode() : GatewayEnum.GatewayAuthStatusEnum.ENABLE.getCode());
-        mcpGatewayPO.setStatus(null != gatewayConfigVO.getStatus() ? gatewayConfigVO.getStatus().getCode() : GatewayEnum.GatewayStatus.NOT_VERIFIED.getCode());
+        mcpGatewayPO.setAuth(null != gatewayConfigVO.getAuth() ? gatewayConfigVO.getAuth().getCode() : GatewayEnum.GatewayAuthStatusEnum.NOT_VERIFIED.getCode());
+        mcpGatewayPO.setStatus(null != gatewayConfigVO.getStatus() ? gatewayConfigVO.getStatus().getCode() : GatewayEnum.GatewayStatus.ENABLE.getCode());
         mcpGatewayDao.insert(mcpGatewayPO);
     }
 

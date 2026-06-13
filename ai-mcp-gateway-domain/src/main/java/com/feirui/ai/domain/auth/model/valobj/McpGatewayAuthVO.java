@@ -1,6 +1,6 @@
 package com.feirui.ai.domain.auth.model.valobj;
 
-import com.feirui.ai.domain.auth.model.valobj.enums.AuthStatusEnum;
+import com.feirui.ai.types.enums.GatewayEnum;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -36,6 +36,6 @@ public class McpGatewayAuthVO {
     /**
      * 状态：0-禁用，1-启用
      */
-    private AuthStatusEnum.AuthConfig status;
+    private GatewayEnum.GatewayStatus status;
 
 }

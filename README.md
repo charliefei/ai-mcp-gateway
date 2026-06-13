@@ -397,7 +397,7 @@ ai-mcp-gateway/
 │           └── GenericHttpGateway.java        #     Retrofit 接口
 ├── ai-mcp-gateway-types/                      # 共享类型
 │   └── src/main/java/.../types/
-│       ├── enums/                             #   枚举（GatewayEnum, AuthStatusEnum 等）
+│       ├── enums/                             #   枚举（GatewayEnum 等）
 │       ├── common/                            #   常量（ResponseCode, McpErrorCodes）
 │       └── exception/                         #   自定义异常
 ├── ai-mcp-gateway-admin-ui/                   # 管理后台（React）
