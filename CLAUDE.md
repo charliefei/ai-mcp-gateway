@@ -6,6 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 An MCP (Model Context Protocol) gateway that exposes HTTP/REST APIs as MCP-compatible tools. Clients connect via **SSE** (legacy) or **Streamable HTTP**, then send JSON-RPC 2.0 requests (initialize, tools/list, tools/call, resources/list). The gateway translates tool calls into HTTP requests against configured backend APIs. The transport is selected per gateway via the `transport` field in `mcp_gateway` (see **Transports** below for protocol details).
 
+## Documentation
+
+- `README.md` — overview, deployment, and full feature list
+- `docs/mysql/sql/ai_mcp_gateway_v2.sql` — database schema (run once before first start)
+
 ## First-time Setup
 
 1. Create the MySQL database: `CREATE DATABASE ai_mcp_gateway_v2;` (no migrations are bundled)
@@ -34,6 +39,9 @@ mvn test
 # Run a single test class
 mvn test -pl ai-mcp-gateway-app -Dtest=ApiTest
 
+# Run all tests in a single module
+mvn test -pl ai-mcp-gateway-case
+
 # Run admin UI (from ai-mcp-gateway-admin-ui)
 npm install
 npm run dev
@@ -61,8 +69,8 @@ npm run build
 - JSON-RPC 2.0 schema (sealed interfaces + records): `McpSchemaVO` in `ai-mcp-gateway-domain` — defines `JSONRPCRequest`, `JSONRPCNotification`, `JSONRPCResponse`
 - SSE controller: `McpGatewayController` (trigger layer) — handles the legacy SSE transport at `/{gatewayId}/mcp/sse`
 - Streamable HTTP controller: `McpStreamableController` (trigger layer) — handles GET/POST/DELETE at `/{gatewayId}/mcp`
-- Session/message chain wiring (SSE): `DefaultMcpSessionFactory`, `DefaultMcpMessageFactory` in case layer (`com.feirui.ai.cases.mcp.sse.*`)
-- Session/message chain wiring (Streamable): `DefaultMcpStreamableSessionFactory`, `DefaultMcpStreamableMessageFactory` in case layer (`com.feirui.ai.cases.mcp.streamable.*`)
+- Session/message chain wiring (SSE): `DefaultMcpSSESessionFactory` (session), `DefaultMcpMessageFactory` (message) in case layer (`com.feirui.ai.cases.mcp.sse.*`)
+- Session/message chain wiring (Streamable): `DefaultMcpStreamableSessionFactory` (session), `DefaultMcpStreamableMessageFactory` (message) in case layer (`com.feirui.ai.cases.mcp.streamable.*`)
 - MyBatis mappers: `ai-mcp-gateway-app/src/main/resources/mybatis/mapper/`
 
 ## Architecture
@@ -97,6 +105,7 @@ Factories (`DefaultMcpSessionFactory`, `DefaultMcpMessageFactory`, `DefaultMcpSt
 ### Strategy Pattern (domain layer)
 - `SessionMessageHandlerMethodEnum` maps JSON-RPC method names to Spring bean handler names. `SessionMessageService` dispatches to the correct `IRequestHandler` implementation via a `Map<String, IRequestHandler>`.
 - Protocol analysis uses `IProtocolAnalysisStrategy` implementations for parsing OpenAPI parameters vs request bodies.
+- **`limit+1` SQL trick for "has more"**: When a search/list query needs both a capped result and a "has more" flag without a separate `COUNT(*)`, run `LIMIT #{limit + 1}` and check `result.size() > limit`. Used by `AdminRepository.globalSearch` to set `truncated = 1` for the "查看全部" link in the global-search palette.
 
 ### MCP Protocol (domain layer)
 `McpSchemaVO` defines the JSON-RPC 2.0 message types as Java 17 sealed interfaces and records: `JSONRPCRequest`, `JSONRPCNotification`, `JSONRPCResponse`. Protocol version: `2024-11-05`.
@@ -151,7 +160,7 @@ The `api_key` is optional on both transports and required only for gateways with
 
 - The `api_key` is passed as a **query parameter** (`?api_key=KEY`), not as an HTTP header
 - `mvn spring-boot:run` must be run from repo root (parent POM), not from `ai-mcp-gateway-app/`
-- Database `ai_mcp_gateway_v2` must be created manually before first run (no schema migration scripts in repo)
+- Database `ai_mcp_gateway_v2` must be created manually before first run — schema is in `docs/mysql/sql/ai_mcp_gateway_v2.sql`
 - `vite.config.ts` requires `@types/node` for `path` and `__dirname` — if builds fail with TS2307/TS2304, run `npm install --save-dev @types/node`
 - `application-dev.yml` contains a hardcoded MySQL password — do NOT copy dev credentials into test/prod profiles; use env vars
 
@@ -164,6 +173,7 @@ An operations management subsystem at `/admin/` provides CRUD management for gat
 - **Protocol config**: save/delete/import (OpenAPI JSON), query list/paginated/by gateway ID, analysis (preview parsed OpenAPI)
 - **Auth config**: save/delete, query list/paginated/by gateway ID
 - **LLM test call**: `test_call_gateway` — sends a test request through the gateway to verify end-to-end connectivity
+- **Global search**: `GET /admin/global_search?keyword=xxx&limit=5` — returns categorized matches (网关/工具/协议/认证) with `count`, `truncated`, and `items` per category. Follows the same DDD chain as other admin endpoints.
 
 Triggers route to case-layer admin services (`IAdminGatewayService`, `IAdminAuthService`, `IAdminProtocolService`, `IAdminManageService`, `IAdminLLMService`), which delegate to domain services in `domain.gateway`, `domain.admin`, and `domain.llm` packages.
 
@@ -176,6 +186,10 @@ Triggers route to case-layer admin services (`IAdminGatewayService`, `IAdminAuth
 - **Re-export pattern when swapping implementations**: When replacing the implementation of a UI primitive, keep the existing export name via `export { NewImpl as OldName }` so call sites don't need to change. Example: `export { FlatSelect as Select }`.
 - **Admin UI type/build checks**: `npx tsc --noEmit` (type check), `npx vite build` (production build). There is no lint config — these two commands are the verification surface.
 - **`FormField` label is `ReactNode`**: `FormField` in `src/components/common/FormField.tsx` accepts `label?: ReactNode`, so icon-prefixed labels work: `<FormField label={<span className="flex items-center gap-1.5"><Key className="h-3 w-3" /> 认证 API Key</span>}>`.
+- **Global search palette**: `src/components/layout/GlobalSearch.tsx` opens from the TopBar button or `⌘K`/`Ctrl+K` (listener mounted in `MainLayout`). Calls `searchApi.globalSearch(keyword, 5)` and navigates to `/${path}?q=${encoded}` on click. Reuse the existing custom `Dialog` for the modal — it already handles Escape, backdrop, body overflow.
+- **Debounce hook**: `src/hooks/use-debounce.ts` — `useDebounce<T>(value, 200)` for throttling search inputs.
+- **Per-page `?q=` prefill**: Gateway/Tool/Protocol/Auth list pages each read `?q=` via `useSearchParams` and prefill their primary local search field (`searchGatewayName` / `searchGatewayId` / `searchHttpUrl` / `searchGatewayId`). A second `useEffect` syncs state if the URL changes after mount. When adding a new list page that should participate in global search, mirror this pattern: `useState(() => searchParams.get('q') ?? '')` + sync `useEffect`.
+- **Auth API key masking**: `apiKey` is masked server-side in the global-search response (`maskApiKey` in `AdminRepository.java`) — frontend never receives a plaintext key from `global_search`. Other endpoints still return plaintext; the existing `ApiKeyCell` component handles client-side masking/reveal.
 
 ## Key Dependencies
 
