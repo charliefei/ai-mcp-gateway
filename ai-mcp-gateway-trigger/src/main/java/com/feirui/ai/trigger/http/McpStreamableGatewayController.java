@@ -33,7 +33,7 @@ import java.util.UUID;
 @RestController
 @CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.OPTIONS})
 @RequestMapping("/{gatewayId}/mcp")
-public class McpStreamableController implements IMcpStreamableService {
+public class McpStreamableGatewayController implements IMcpStreamableService {
 
     @Resource(name = "mcpStreamableSessionService")
     private IMcpSessionService mcpStreamableSessionService;

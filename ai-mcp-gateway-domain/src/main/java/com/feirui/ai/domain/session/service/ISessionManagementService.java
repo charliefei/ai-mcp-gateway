@@ -1,7 +1,11 @@
 package com.feirui.ai.domain.session.service;
 
 import com.feirui.ai.domain.session.model.valobj.SessionConfigVO;
+import com.feirui.ai.domain.session.model.valobj.SessionSyncEventVO;
+import com.feirui.ai.domain.session.model.valobj.SessionSyncInfoVO;
 import com.feirui.ai.domain.session.model.valobj.enums.SessionTransportTypeEnumVO;
+
+import java.util.function.Consumer;
 
 /**
  * 会话管理服务接口
@@ -21,10 +25,15 @@ public interface ISessionManagementService {
     SessionConfigVO createSession(String gatewayId, String apiKey, SessionTransportTypeEnumVO transportType);
 
     /**
-     * 删除回话
+     * 删除会话
      * @param sessionId 会话ID
      */
     void removeSession(String sessionId);
+
+    /**
+     * 仅从当前实例移除本地会话
+     */
+    void removeLocalSession(String sessionId);
 
     /**
      * 获取会话
@@ -32,6 +41,26 @@ public interface ISessionManagementService {
      * @return 会话配置
      */
     SessionConfigVO getSession(String sessionId);
+
+    /**
+     * 同步远端会话到本地实例
+     */
+    void syncSession(SessionSyncInfoVO sessionSyncInfoVO);
+
+    /**
+     * 是否已存在本地会话
+     */
+    boolean hasSession(String sessionId);
+
+    /**
+     * 初始化分布式会话数据
+     */
+    void initializeDistributedSessions();
+
+    /**
+     * 订阅 Redis Session 同步事件
+     */
+    void subscribeSessionSyncEvent(Consumer<SessionSyncEventVO> consumer);
 
     /**
      * 清理过期会话
