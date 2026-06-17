@@ -1,0 +1,68 @@
+# =============================================================================
+# Project-root .dockerignore
+#
+# The backend Dockerfile is built with `context: ../..` so this file
+# applies to BOTH the backend image (which needs all Maven sources) and
+# the admin-ui image (which needs only its own subdir). Keep it broad;
+# each Dockerfile is selective about what it COPYs.
+# =============================================================================
+
+# --- VCS --------------------------------------------------------------------
+.git
+.gitignore
+.gitattributes
+
+# --- IDE / editor -----------------------------------------------------------
+.idea
+.vscode
+*.iml
+*.ipr
+*.iws
+.DS_Store
+Thumbs.db
+
+# --- Admin UI build outputs (built inside the image) -----------------------
+ai-mcp-gateway-admin-ui/node_modules
+ai-mcp-gateway-admin-ui/dist
+ai-mcp-gateway-admin-ui/.vite
+ai-mcp-gateway-admin-ui/npm-debug.log*
+ai-mcp-gateway-admin-ui/yarn-*.log*
+ai-mcp-gateway-admin-ui/package-lock.json.bak
+
+# Admin UI Docker artifacts (the admin UI Dockerfile's own build context
+# already excludes them, but listing here makes the backend build smaller
+# and makes the file self-describing).
+ai-mcp-gateway-admin-ui/Dockerfile
+ai-mcp-gateway-admin-ui/.dockerignore
+ai-mcp-gateway-admin-ui/nginx.conf
+
+# --- Backend build outputs (always rebuilt inside the image) ---------------
+# target/ from any maven module is rebuilt by the builder stage — never
+# copy a pre-built one into the build context.
+**/target
+
+# --- Deploy stack ----------------------------------------------------------
+docs/deploy/.env
+docs/deploy/.env.*
+docs/deploy/.venv
+docs/deploy/*.log
+
+# Docker self-references
+Dockerfile
+.dockerignore
+
+# --- Secrets & local config -------------------------------------------------
+.env
+.env.*
+*.pem
+*.key
+*.p12
+
+# --- Logs / coverage / temp ------------------------------------------------
+*.log
+logs/
+coverage/
+.nyc_output/
+*.tmp
+*.bak
+*.swp

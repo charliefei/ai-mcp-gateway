@@ -10,6 +10,7 @@ An MCP (Model Context Protocol) gateway that exposes HTTP/REST APIs as MCP-compa
 
 - `README.md` — overview, deployment, and full feature list
 - `docs/mysql/sql/ai_mcp_gateway_v2.sql` — database schema (run once before first start)
+- `docs/deploy/README.md` — Docker Compose deployment (single + cluster modes)
 
 ## First-time Setup
 
@@ -67,10 +68,12 @@ npm run build
 
 - Spring Boot main: `ai-mcp-gateway-app/src/main/java/.../Application.java`
 - JSON-RPC 2.0 schema (sealed interfaces + records): `McpSchemaVO` in `ai-mcp-gateway-domain` — defines `JSONRPCRequest`, `JSONRPCNotification`, `JSONRPCResponse`
-- SSE controller: `McpGatewayController` (trigger layer) — handles the legacy SSE transport at `/{gatewayId}/mcp/sse`
-- Streamable HTTP controller: `McpStreamableController` (trigger layer) — handles GET/POST/DELETE at `/{gatewayId}/mcp`
+- SSE controller: `McpSSEGatewayController` (trigger layer) — handles the legacy SSE transport at `/{gatewayId}/mcp/sse`
+- Streamable HTTP controller: `McpStreamableGatewayController` (trigger layer) — handles GET/POST/DELETE at `/{gatewayId}/mcp`
 - Session/message chain wiring (SSE): `DefaultMcpSSESessionFactory` (session), `DefaultMcpMessageFactory` (message) in case layer (`com.feirui.ai.cases.mcp.sse.*`)
 - Session/message chain wiring (Streamable): `DefaultMcpStreamableSessionFactory` (session), `DefaultMcpStreamableMessageFactory` (message) in case layer (`com.feirui.ai.cases.mcp.streamable.*`)
+- Distributed-session startup listener: `SessionRedisListener` (trigger layer) — subscribes to Redis session-sync events on boot
+- Case-layer distributed bridge: `DistributedRedisService` (`com.feirui.ai.cases.distributed.redis.*`) — links trigger listener to domain services
 - MyBatis mappers: `ai-mcp-gateway-app/src/main/resources/mybatis/mapper/`
 
 ## Architecture
@@ -110,6 +113,18 @@ Factories (`DefaultMcpSessionFactory`, `DefaultMcpMessageFactory`, `DefaultMcpSt
 ### MCP Protocol (domain layer)
 `McpSchemaVO` defines the JSON-RPC 2.0 message types as Java 17 sealed interfaces and records: `JSONRPCRequest`, `JSONRPCNotification`, `JSONRPCResponse`. Protocol version: `2024-11-05`.
 
+### Distributed Sessions (Redis backplane)
+Multi-instance deployments share session state via Redisson (added in commits `86ecbf9` + `6db88be`):
+
+- **Storage**: session metadata persisted to a Redis `RMap` via `SessionPort` (infrastructure adapter implementing `ISessionPort`).
+- **Sync events**: every create/remove publishes a `SessionSyncEventVO` carrying a `SessionSyncInfoVO` payload on a Redisson Pub/Sub topic.
+- **Listener**: `SessionRedisListener` (trigger layer) subscribes on startup and rebroadcasts events to `SessionDistributedService`, which reconciles the local in-memory `SessionManagementService`.
+- **Cross-node cleanup**: both SSE and Streamable `EndNode`s publish a removal event so peer nodes drop the session immediately when an SSE stream closes.
+
+Redis config lives in `application-dev.yml` under `redis.sdk.config` (`host`, `port`, `pool-size`, `min-idle-size`). Each profile must supply its own block — env-var-driven like the DB password.
+
+Domain ports live in `com.feirui.ai.domain.session.service.distributed` and `management` sub-packages; the case-layer bridge is `com.feirui.ai.cases.distributed.redis.DistributedRedisService`. Single-instance dev still works without Redis — the listener will fail to subscribe but local in-memory sessions continue.
+
 ## Data Layer
 
 - **Database**: MySQL 8.x via MyBatis. Mapper XMLs in `ai-mcp-gateway-app/src/main/resources/mybatis/mapper/`.
@@ -120,13 +135,13 @@ Factories (`DefaultMcpSessionFactory`, `DefaultMcpMessageFactory`, `DefaultMcpSt
 
 The gateway supports two MCP transports side-by-side, selectable per gateway via the `transport` field in `mcp_gateway` (values from `SessionTransportTypeEnumVO`: `sse`, `streamable`).
 
-### SSE transport (`McpGatewayController`, path `/{gatewayId}/mcp/sse`)
+### SSE transport (`McpSSEGatewayController`, path `/{gatewayId}/mcp/sse`)
 
 1. Client GETs `/{gatewayId}/mcp/sse?api_key=KEY` → server creates session, returns SSE stream; first event is `endpoint` with the message URL, e.g. `/mcp/sse/messages?sessionId=<id>`
 2. Client POSTs JSON-RPC body to the message URL with `sessionId` and (if auth enabled) `api_key` query params
 3. Responses stream back over the original SSE connection
 
-### Streamable HTTP transport (`McpStreamableController`, path `/{gatewayId}/mcp`)
+### Streamable HTTP transport (`McpStreamableGatewayController`, path `/{gatewayId}/mcp`)
 
 1. `GET /{gatewayId}/mcp` (header `Mcp-Session-Id: <id>`, optional `?api_key=`) — opens an SSE listener stream bound to the existing session
 2. `POST /{gatewayId}/mcp` (header `Mcp-Session-Id: <id>`, optional `?api_key=`, body = JSON-RPC 2.0) — sends a request; **must include `Accept: application/json, text/event-stream`** or the server returns 406
@@ -150,6 +165,29 @@ The `api_key` is optional on both transports and required only for gateways with
 - Spring AI configured for OpenAI-compatible endpoints against Alibaba Bailian/DashScope (`qwen3.6-flash` model)
 - Thread pool: core 20 / max 50, CallerRunsPolicy rejection (see `ThreadPoolConfig`)
 
+## Docker Deployment
+
+A self-contained compose stack lives at `docs/deploy/`:
+- `docker-compose.yml` — orchestrates MySQL 8, Redis 7, the Spring Boot app, an `app-lb` nginx load balancer, and the admin UI
+- `nginx-app.conf` — backend load balancer with docker-DNS-based service discovery
+- `.env.example` — env template (`DASHSCOPE_API_KEY`, `MYSQL_ROOT_PASSWORD`, host-port overrides)
+
+**Per-module Dockerfiles**: `ai-mcp-gateway-app/Dockerfile` (pre-existing, copies the prebuilt jar) and `ai-mcp-gateway-admin-ui/Dockerfile` (multi-stage Node 20 → nginx 1.27). The admin UI's `nginx.conf` has a `__BACKEND_URL__` placeholder that the Dockerfile's `sed` step replaces at build time — **changing the backend URL requires rebuilding the admin UI image**, not just restarting the container.
+
+**Mode switching via profiles**:
+- Single (default): `docker compose up -d --build` — 1 backend (`app`) behind `app-lb`
+- Cluster: `docker compose --profile cluster up -d --build` — adds `app-1`, `app-2`, `app-3`. `nginx-app.conf` uses `resolver 127.0.0.11` + `resolve` on each upstream `server`, so services whose DNS doesn't resolve (inactive profile) are silently excluded from the pool.
+
+**Host port mapping**: the user-facing URL `http://localhost:8777/api-gateway/` is unchanged, but in docker that port is now served by `app-lb` (nginx) on every `app*` container — the Spring Boot containers are reachable only inside the `gateway-net` bridge.
+
+**Env-var overrides for the dev profile** (compose uses these to point at in-network MySQL/Redis):
+- `SPRING_DATASOURCE_URL` / `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` (Spring relaxed binding)
+- `REDIS_SDK_CONFIG_HOST` / `REDIS_SDK_CONFIG_PORT` (YAML path is `redis.sdk.config.host`)
+
+**Health-check URL**: there is no Spring Actuator. The compose `healthcheck` hits `/api-gateway/admin/query_gateway_config_list`.
+
+**DB schema bootstrap**: `docs/mysql/sql/` is bind-mounted to `/docker-entrypoint-initdb.d` and runs **only once**, on first start with an empty data volume. To re-bootstrap: `docker compose down -v`.
+
 ## Access URLs
 
 - API: `http://localhost:8777/api-gateway`
@@ -163,6 +201,9 @@ The `api_key` is optional on both transports and required only for gateways with
 - Database `ai_mcp_gateway_v2` must be created manually before first run — schema is in `docs/mysql/sql/ai_mcp_gateway_v2.sql`
 - `vite.config.ts` requires `@types/node` for `path` and `__dirname` — if builds fail with TS2307/TS2304, run `npm install --save-dev @types/node`
 - `application-dev.yml` contains a hardcoded MySQL password — do NOT copy dev credentials into test/prod profiles; use env vars
+- **Reverse-proxying the MCP transport**: any nginx/HAProxy/ALB in front of the gateway must set `proxy_buffering off`, `proxy_http_version 1.1`, `proxy_set_header Connection ""`, and 1h `proxy_send_timeout` / `proxy_read_timeout`, otherwise SSE / Streamable HTTP streams stall. `docs/deploy/nginx-app.conf` is the reference config.
+- **`application-dev.yml` hardcodes Redis at `192.168.1.108:16379`** — for non-local deployments override via `REDIS_SDK_CONFIG_HOST` / `REDIS_SDK_CONFIG_PORT` env vars (Spring relaxed binding of the YAML path `redis.sdk.config.host`).
+- **Admin UI backend URL is baked at image build time**: the `__BACKEND_URL__` placeholder in `ai-mcp-gateway-admin-ui/nginx.conf` is `sed`-replaced by the Dockerfile. Switching the upstream (e.g. from `app` to `app-lb`) requires `docker compose build admin-ui` before `up`.
 
 ## Admin Management API
 
@@ -198,3 +239,4 @@ Triggers route to case-layer admin services (`IAdminGatewayService`, `IAdminAuth
 - `retrofit2` + `okhttp3` — HTTP client for backend API calls
 - `fastjson` 2.x — JSON processing
 - `reactor-core` — reactive streams for SSE
+- `redisson` — distributed Redis client for session sync (RMap + Pub/Sub topic)

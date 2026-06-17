@@ -1,0 +1,90 @@
+# =============================================================================
+# ai-mcp-gateway-app · load balancer (template)
+#
+# This file is mounted into `app-lb` at
+#   /etc/nginx/templates/default.conf.template
+# The official `nginx:alpine` entrypoint runs `envsubst` on every *.template
+# file in that directory at container start, writing the rendered output to
+# /etc/nginx/conf.d/ (overwriting the default `default.conf`). So `${VAR}`
+# placeholders below are resolved from the `app-lb` container's environment,
+# which docker-compose populates from APP_PORT / APP_1_PORT / APP_2_PORT /
+# APP_3_PORT (see docker-compose.yml).
+#
+# Each Spring Boot instance (`app`, `app-1`, `app-2`, `app-3`) listens on
+# its own internal port; the upstream block routes to that port. The
+# `resolve` flag means backends whose DNS doesn't resolve (services in an
+# inactive compose profile) are silently excluded from the pool.
+# =============================================================================
+
+# -- Round-robin upstream pool -------------------------------------------------
+upstream gateway_backends {
+    # Required for the `resolve` parameter on `server` directives below:
+    # tells nginx to cache the resolved addresses for this upstream block.
+    zone backends 64k;
+
+    # docker embedded DNS — re-resolves stopped service names out of the pool.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+
+    # Reuse TCP connections to backends (HTTP/1.1 keep-alive).
+    keepalive 32;
+
+    # Default profile: one instance, always started.
+    server app:${APP_PORT}    max_fails=2 fail_timeout=10s resolve;
+
+    # Cluster profile: enabled with `docker compose --profile cluster ...`.
+    # When the profile is not active these hostnames do not resolve and
+    # nginx automatically skips them — no manual reconfiguration needed.
+    server app-1:${APP_1_PORT} max_fails=2 fail_timeout=10s resolve;
+    server app-2:${APP_2_PORT} max_fails=2 fail_timeout=10s resolve;
+    server app-3:${APP_3_PORT} max_fails=2 fail_timeout=10s resolve;
+}
+
+# -- Public listener -----------------------------------------------------------
+server {
+    listen       80 default_server;
+    listen       [::]:80 default_server;
+    server_name  _;
+
+    server_tokens off;
+    charset      utf-8;
+
+    client_max_body_size 16m;
+    keepalive_timeout     65;
+
+    # ---- Health endpoint (used by docker healthcheck and load balancers) ----
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # ---- Gateway proxy (default action for everything else) ----------------
+    location / {
+        proxy_pass http://gateway_backends;
+
+        # Failover: try the next upstream if this one errors out, times out,
+        # or returns 502/503/504. Tries are bounded to avoid request storms.
+        proxy_next_upstream       error timeout http_502 http_503 http_504;
+        proxy_next_upstream_tries 3;
+        proxy_next_upstream_timeout 10s;
+
+        # SSE / long-lived MCP stream support
+        proxy_http_version 1.1;
+        proxy_set_header Connection        "";
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+
+        # Long timeouts for the MCP Streamable HTTP / SSE transport.
+        proxy_connect_timeout 30s;
+        proxy_send_timeout    1h;
+        proxy_read_timeout    1h;
+
+        # Critical for SSE: do not buffer the response.
+        proxy_buffering         off;
+        proxy_cache             off;
+        proxy_request_buffering off;
+    }
+}

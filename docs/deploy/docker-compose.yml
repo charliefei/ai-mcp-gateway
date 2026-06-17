@@ -1,0 +1,291 @@
+# =============================================================================
+# AI MCP Gateway · Docker Compose (single instance + cluster)
+#
+# Brings up everything needed to run the gateway end-to-end. The backend
+# (Spring Boot) can run as a single instance OR as a multi-instance cluster
+# load-balanced by a dedicated nginx (`app-lb`).
+#
+#   - admin-ui : React/Vite SPA, served by nginx on host :80
+#   - app-lb   : nginx load balancer on host :8777, in front of the `app*` pool
+#   - app      : Spring Boot gateway, 1 instance (default profile)
+#   - app-1/2/3: extra Spring Boot instances (cluster profile)
+#   - mysql    : MySQL 8.x with the schema auto-loaded on first start
+#   - redis    : Redis 7 (Redisson client for distributed session sync)
+#
+# Usage:
+#   cp .env.example .env       # then edit .env to set DASHSCOPE_API_KEY, etc.
+#
+#   # Single instance (1 backend behind the load balancer):
+#   docker compose up -d --build
+#
+#   # Cluster (4 backends behind the load balancer):
+#   docker compose --profile cluster up -d --build
+#
+#   docker compose logs -f app-lb
+#
+# Open:
+#   http://localhost/                     admin console (nginx)
+#   http://localhost:8777/api-gateway/    gateway API + admin endpoints
+#                                            (load-balanced by app-lb)
+# =============================================================================
+
+x-app-base: &app-base
+  restart: unless-stopped
+  networks: [gateway-net]
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "5"
+
+# Shared env block for every Spring Boot instance — ensures they all see
+# the same DB / Redis / LLM configuration regardless of profile.
+x-app-env: &app-env
+  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+  SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-ai_mcp_gateway_v2}?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
+  SPRING_DATASOURCE_USERNAME: root
+  SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+  REDIS_SDK_CONFIG_HOST: redis
+  REDIS_SDK_CONFIG_PORT: "6379"
+  DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+  JAVA_OPTS: "-Xms512m -Xmx1024m -XX:+UseG1GC"
+  TZ: Asia/Shanghai
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # MySQL 8 — persistent state for gateway/tool/protocol/auth configs
+  # ---------------------------------------------------------------------------
+  mysql:
+    <<: *app-base
+    image: mysql:8.0
+    container_name: ai-mcp-gateway-mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ai_mcp_gateway_v2}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Auto-load the bundled schema on first start. The init scripts are
+      # executed in alphabetical order; this file already contains all DDL
+      # and DML needed to bootstrap the v2 database.
+      - ../../docs/mysql/sql:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Exposed for ad-hoc access from the host; remove in production.
+      - "${MYSQL_HOST_PORT:-3306}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-123456}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Redis 7 — distributed session backplane (Redisson)
+  # ---------------------------------------------------------------------------
+  redis:
+    <<: *app-base
+    image: redis:7-alpine
+    container_name: ai-mcp-gateway-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # ---------------------------------------------------------------------------
+  # app — Spring Boot gateway, single instance (default profile)
+  # ---------------------------------------------------------------------------
+  app:
+    <<: *app-base
+    profiles: [default]
+    build:
+      context: ../..
+      dockerfile: ai-mcp-gateway-app/Dockerfile
+    image: ai-mcp-gateway-app:latest
+    container_name: ai-mcp-gateway-app
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      # Spring Boot relaxed binding: SERVER_PORT -> server.port.
+      # Each app* instance can listen on its own internal port; the matching
+      # APP_PORT is also passed to app-lb so the upstream server list uses
+      # the correct port.
+      SERVER_PORT: ${APP_PORT:-8777}
+    # No host port: traffic enters via app-lb. To debug, use
+    #   `docker compose exec app sh` and `docker compose logs -f app`.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${APP_PORT:-8777}/api-gateway/admin/query_gateway_config_list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # app-1 / app-2 / app-3 — additional cluster instances (cluster profile)
+  #
+  # These share the same image as `app`; only their container_name, network
+  # alias, and internal SERVER_PORT differ so the load balancer can address
+  # each one independently. Each one can also get its own JVM heap via
+  # JAVA_OPTS env if you want to tune.
+  # ---------------------------------------------------------------------------
+  app-1:
+    <<: *app-base
+    profiles: [cluster]
+    build:
+      context: ../..
+      dockerfile: ai-mcp-gateway-app/Dockerfile
+    image: ai-mcp-gateway-app:latest
+    container_name: ai-mcp-gateway-app-1
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      SERVER_PORT: ${APP_1_PORT:-8778}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${APP_1_PORT:-8778}/api-gateway/admin/query_gateway_config_list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+
+  app-2:
+    <<: *app-base
+    profiles: [cluster]
+    build:
+      context: ../..
+      dockerfile: ai-mcp-gateway-app/Dockerfile
+    image: ai-mcp-gateway-app:latest
+    container_name: ai-mcp-gateway-app-2
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      SERVER_PORT: ${APP_2_PORT:-8779}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${APP_2_PORT:-8779}/api-gateway/admin/query_gateway_config_list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+
+  app-3:
+    <<: *app-base
+    profiles: [cluster]
+    build:
+      context: ../..
+      dockerfile: ai-mcp-gateway-app/Dockerfile
+    image: ai-mcp-gateway-app:latest
+    container_name: ai-mcp-gateway-app-3
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      SERVER_PORT: ${APP_3_PORT:-8780}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${APP_3_PORT:-8780}/api-gateway/admin/query_gateway_config_list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # app-lb — nginx load balancer in front of the `app*` pool
+  #
+  # Single entrypoint for all gateway traffic (host:8777). Routes round-robin
+  # across whichever `app*` containers are currently up. Uses docker's
+  # embedded DNS (`resolver 127.0.0.11`) with `resolve` so that backends not
+  # in the active profile are automatically excluded.
+  #
+  # Per-service ports are templated into nginx-app.conf.template via envsubst
+  # (the official nginx:alpine entrypoint processes /etc/nginx/templates/ at
+  # container start). The APP_*_PORT env vars below MUST match the
+  # SERVER_PORT values on the corresponding app* services.
+  # ---------------------------------------------------------------------------
+  app-lb:
+    <<: *app-base
+    image: nginx:1.27-alpine
+    container_name: ai-mcp-gateway-app-lb
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      APP_PORT: ${APP_PORT:-8777}
+      APP_1_PORT: ${APP_1_PORT:-8778}
+      APP_2_PORT: ${APP_2_PORT:-8779}
+      APP_3_PORT: ${APP_3_PORT:-8780}
+    volumes:
+      # Mounted into the nginx:alpine template directory — the entrypoint
+      # will run envsubst on it and write the rendered result to
+      # /etc/nginx/conf.d/default.conf (overwriting the stock default).
+      - ./nginx-app.conf.template:/etc/nginx/templates/default.conf.template:ro
+    ports:
+      - "${APP_HOST_PORT:-8777}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # ---------------------------------------------------------------------------
+  # admin-ui — React SPA served by nginx; proxies /api-gateway/ to app-lb
+  # ---------------------------------------------------------------------------
+  admin-ui:
+    <<: *app-base
+    build:
+      context: ../../ai-mcp-gateway-admin-ui
+      dockerfile: Dockerfile
+      args:
+        # The SPA's nginx.conf bakes this in at build time. The load
+        # balancer (app-lb) is the canonical backend entry point, so both
+        # single and cluster modes point here.
+        BACKEND_URL: http://app-lb:80
+    image: ai-mcp-gateway-admin-ui:latest
+    container_name: ai-mcp-gateway-admin-ui
+    depends_on:
+      app-lb:
+        condition: service_healthy
+    ports:
+      - "${ADMIN_UI_HOST_PORT:-80}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+networks:
+  gateway-net:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    name: ai-mcp-gateway-mysql-data
+  redis_data:
+    name: ai-mcp-gateway-redis-data
