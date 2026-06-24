@@ -1,0 +1,283 @@
+# =============================================================================
+# AI MCP Gateway · Docker Compose (pre-built image edition)
+#
+# 与 docker-compose.yml 的区别：
+#   - `app` / `admin-ui` 不再 `build:` 本地源码，而是直接 `image:` 拉取/复用
+#     你提前在宿主机上 `docker build` / `docker pull` 好的镜像。
+#   - 镜像名通过环境变量（APP_IMAGE / ADMIN_UI_IMAGE）注入，便于：
+#       * 切换版本标签（latest / v1.2.0 / commit-sha ...）
+#       * 切到私有仓库（registry.cn-hangzhou.aliyuncs.com/xxx/ai-mcp-gateway-app:tag）
+#       * 本地打 tag 后直接 `up`（无需 registry）
+#
+# 默认行为：
+#   * APP_IMAGE         = ai-mcp-gateway-app:latest         （本地同名 tag 即可）
+#   * ADMIN_UI_IMAGE    = ai-mcp-gateway-admin-ui:latest    （本地同名 tag 即可）
+#   * IMAGE_PULL_POLICY = missing                           （本地已有就不拉，避免离线/无仓库时拉取失败）
+#
+# 用法（推荐先在宿主机打好两个 tag）：
+#   docker build -t ai-mcp-gateway-app:latest      -f ai-mcp-gateway-app/Dockerfile .
+#   docker build -t ai-mcp-gateway-admin-ui:latest --build-arg BACKEND_URL=http://app-lb:80 \
+#                -f ai-mcp-gateway-admin-ui/Dockerfile ./ai-mcp-gateway-admin-ui
+#
+#   cd docs/deploy
+#   cp ../.env.example .env   # 复用现有 .env（如有），至少确保 DASHSCOPE_API_KEY 已设置
+#
+#   # 单实例
+#   docker compose -f docker-compose-simple.yml up -d
+#
+#   # 集群（4 个 app 节点共用同一个镜像）
+#   docker compose -f docker-compose-simple.yml --profile cluster up -d
+#
+# ⚠️  注意：admin-ui 的 BACKEND_URL 是在 构建阶段 通过 `__BACKEND_URL__` 占位符
+#    `sed` 注入到 nginx.conf 的。改后端地址必须重打 admin-ui 镜像（参考 README）。
+#    compose 启动时不会再替换这个值。
+#
+# 访问入口与 docker-compose.yml 完全一致：
+#   http://localhost/                     管理后台
+#   http://localhost:8777/api-gateway/    网关 API
+# =============================================================================
+
+x-app-base: &app-base
+  restart: unless-stopped
+  networks: [gateway-net]
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "5"
+
+# Shared env block for every Spring Boot instance — ensures they all see
+# the same DB / Redis / LLM configuration regardless of profile.
+x-app-env: &app-env
+  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+  SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-ai_mcp_gateway_v2}?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
+  SPRING_DATASOURCE_USERNAME: root
+  SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+  REDIS_SDK_CONFIG_HOST: redis
+  REDIS_SDK_CONFIG_PORT: "6379"
+  DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+  JAVA_OPTS: "-Xms512m -Xmx1024m -XX:+UseG1GC"
+  TZ: Asia/Shanghai
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # MySQL 8 — persistent state for gateway/tool/protocol/auth configs
+  # ---------------------------------------------------------------------------
+  mysql:
+    <<: *app-base
+    image: mysql:8.0
+    container_name: ai-mcp-gateway-mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ai_mcp_gateway_v2}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Auto-load the bundled schema on first start. The init scripts are
+      # executed in alphabetical order; this file already contains all DDL
+      # and DML needed to bootstrap the v2 database.
+      - ../../docs/mysql/sql:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Exposed for ad-hoc access from the host; remove in production.
+      - "${MYSQL_HOST_PORT:-3306}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-123456}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Redis 7 — distributed session backplane (Redisson)
+  # ---------------------------------------------------------------------------
+  redis:
+    <<: *app-base
+    image: redis:7-alpine
+    container_name: ai-mcp-gateway-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # ---------------------------------------------------------------------------
+  # app — Spring Boot gateway, single instance (default profile)
+  #
+  # 直接复用本地已构建/已 pull 的镜像（由 APP_IMAGE 指定）。
+  # 默认 `pull_policy: missing` —— 本地有就用本地，没有才去拉，避免离线/无仓库时报错。
+  # 想强制每次启动都拉最新可设 IMAGE_PULL_POLICY=always。
+  # ---------------------------------------------------------------------------
+  app:
+    <<: *app-base
+    profiles: [default]
+    image: ${APP_IMAGE:-ai-mcp-gateway-app:latest}
+    container_name: ai-mcp-gateway-app
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      # Spring Boot relaxed binding: SERVER_PORT -> server.port.
+      # Each app* instance can listen on its own internal port; the matching
+      # APP_PORT is also passed to app-lb so the upstream server list uses
+      # the correct port.
+      SERVER_PORT: ${APP_PORT:-8777}
+    # No host port: traffic enters via app-lb. To debug, use
+    #   `docker compose exec app sh` and `docker compose logs -f app`.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${APP_PORT:-8777}/api-gateway/admin/query_gateway_config_list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # app-1 / app-2 / app-3 — additional cluster instances (cluster profile)
+  #
+  # 与 `app` 共用同一份镜像（同样的 APP_IMAGE），仅 container_name 和内部
+  # SERVER_PORT 不同。集群模式下跑 4 个 Spring Boot 进程，前面由 app-lb 轮询。
+  # ---------------------------------------------------------------------------
+  app-1:
+    <<: *app-base
+    profiles: [cluster]
+    image: ${APP_IMAGE:-ai-mcp-gateway-app:latest}
+    container_name: ai-mcp-gateway-app-1
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      SERVER_PORT: ${APP_1_PORT:-8778}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${APP_1_PORT:-8778}/api-gateway/admin/query_gateway_config_list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+
+  app-2:
+    <<: *app-base
+    profiles: [cluster]
+    image: ${APP_IMAGE:-ai-mcp-gateway-app:latest}
+    container_name: ai-mcp-gateway-app-2
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      SERVER_PORT: ${APP_2_PORT:-8779}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${APP_2_PORT:-8779}/api-gateway/admin/query_gateway_config_list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+
+  app-3:
+    <<: *app-base
+    profiles: [cluster]
+    image: ${APP_IMAGE:-ai-mcp-gateway-app:latest}
+    container_name: ai-mcp-gateway-app-3
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      SERVER_PORT: ${APP_3_PORT:-8780}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${APP_3_PORT:-8780}/api-gateway/admin/query_gateway_config_list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # app-lb — nginx load balancer in front of the `app*` pool
+  #
+  # 与 docker-compose.yml 完全一致 —— 镜像、模板挂载、依赖关系、envsubst
+  # 注入 APP_*_PORT 到 nginx upstream 的逻辑都不变。
+  # ---------------------------------------------------------------------------
+  app-lb:
+    <<: *app-base
+    image: nginx:1.27-alpine
+    container_name: ai-mcp-gateway-app-lb
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      APP_PORT: ${APP_PORT:-8777}
+      APP_1_PORT: ${APP_1_PORT:-8778}
+      APP_2_PORT: ${APP_2_PORT:-8779}
+      APP_3_PORT: ${APP_3_PORT:-8780}
+    volumes:
+      # Mounted into the nginx:alpine template directory — the entrypoint
+      # will run envsubst on it and write the rendered result to
+      # /etc/nginx/conf.d/default.conf (overwriting the stock default).
+      - ./nginx-app.conf.template:/etc/nginx/templates/default.conf.template:ro
+    ports:
+      - "${APP_HOST_PORT:-8777}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # ---------------------------------------------------------------------------
+  # admin-ui — React SPA served by nginx; proxies /api-gateway/ to app-lb
+  #
+  # 与 docker-compose.yml 的区别：不再 `build:`,直接复用 ADMIN_UI_IMAGE 镜像。
+  #
+  # ⚠️  BACKEND_URL 必须在 构建 admin-ui 镜像 时通过 `--build-arg BACKEND_URL=...`
+  #    传入并 sed 进 nginx.conf（默认值见 ai-mcp-gateway-admin-ui/Dockerfile）。
+  #    compose 启动时不会再次替换此值，所以：
+  #      * 想让它走 app-lb（推荐，跟 app-lb 在同一 docker 网络里）：构建时传
+  #        `--build-arg BACKEND_URL=http://app-lb:80`
+  #      * 想让它直接打到某个 app 节点：不推荐；优先走 app-lb 拿负载均衡。
+  # ---------------------------------------------------------------------------
+  admin-ui:
+    <<: *app-base
+    image: ${ADMIN_UI_IMAGE:-ai-mcp-gateway-admin-ui:latest}
+    container_name: ai-mcp-gateway-admin-ui
+    depends_on:
+      app-lb:
+        condition: service_healthy
+    ports:
+      - "${ADMIN_UI_HOST_PORT:-80}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+networks:
+  gateway-net:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    name: ai-mcp-gateway-mysql-data
+  redis_data:
+    name: ai-mcp-gateway-redis-data
